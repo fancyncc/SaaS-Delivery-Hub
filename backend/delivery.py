@@ -110,6 +110,10 @@ async def artifact(session: AsyncSession, project: Project, run: AgentRun, kind:
     await session.flush()
     from backend.storage import persist
     await persist(item)
+    from backend.config import get_settings
+    if get_settings().rag_mode == "real":
+        from backend.retrieval_sources import sync_artifact
+        await sync_artifact(session, item)
     return item
 
 

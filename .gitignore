@@ -12,7 +12,13 @@ credentials*.json
 secrets*.json
 
 # Private or internal documentation
-docs/
+docs/*
+!docs/AGENT_RAG.md
+!docs/RAG_CPU.md
+!docs/CHAT_AGENT.md
+!docs/CPU_PREPRODUCTION_ACCEPTANCE.md
+!docs/OPEN_REGISTRATION.md
+!docs/REPOSITORY_LAYOUT.md
 
 # Python environments, caches and build artifacts
 .venv/
@@ -48,13 +54,14 @@ pip-wheel-metadata/
 backups/
 data/
 uploads/
+knowledge/models/
 logs/
 *.log
 
 # Frontend dependencies and generated output
 node_modules/
-web/node_modules/
-web/dist/
+frontend/node_modules/
+frontend/dist/
 *.tsbuildinfo
 .vite/
 .vite-inspect/

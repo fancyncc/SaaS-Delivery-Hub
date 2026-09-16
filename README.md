@@ -1,8 +1,16 @@
 # SaaS Implementation Agent
 
+聊天现支持按需问题重写/澄清、最多两轮原生工具调用、MCP 只读接口及 SSE 流式回答。真实模式下，附件、项目和企业资料统一采用 BM25 + BGE 向量召回、RRF 融合与重排。本地部署、API 协议和验收边界见 [聊天 Agent 说明](docs/CHAT_AGENT.md)。
+
+AI 助手：客户工作台新增多轮对话、私有文档上传、项目材料和企业知识检索、来源引用及可管理的长期记忆。真实模型复用已有模型配置，离线模式明确显示资料原文。使用方式、格式限制及迁移见 [AI 助手说明](docs/AI_CHAT.md)。
+
+长程 Agent 与 RAG：新增阶段内里程碑 DAG、工具动作记录、评估重试/重规划、同 Run 恢复、项目经验记忆，以及带版本过滤的分块混合检索。默认保留旧引擎，新 Run 可通过 `AGENT_ENGINE=v2` 启用；配置、迁移和验收边界见 [Agent 与 RAG 说明](docs/AGENT_RAG.md)。
+
+CPU 本地检索：BGE-small 中文 512 维向量＋BGE-base 重排，支持后台建库、候选与推理窗口预算。依赖安装、模型下载、旧索引迁移与验证见 [CPU 检索部署说明](docs/RAG_CPU.md)。
+
 本地一键启动（Windows）：在项目根目录执行 ` .\start.ps1 `，然后打开 <http://127.0.0.1:8000>。脚本自动使用项目 `.venv`、按需构建前端、备份并迁移本地 SQLite 数据库；无需 npm，也无需单独运行前端。已有服务请先按 Ctrl+C 停止。接口文档仍在 <http://127.0.0.1:8000/docs>。此脚本用于已安装项目依赖的本机开发环境，服务器数据库使用下方部署流程。
 
-开放注册：所有用户可使用账号和密码自行注册，立即使用个人空间，在个人主页绑定邮箱、填写手机号；验证邮箱后可创建公司。手机号暂不验证，不用于登录或找回密码。公司管理员可批量导入成员并发送激活链接；每个账号最多加入一家企业。使用流程、重复核验规则及迁移步骤见 [开放注册说明](OPEN_REGISTRATION.md)。
+开放注册：所有用户可使用账号和密码自行注册，立即使用个人空间，在个人主页绑定邮箱、填写手机号；验证邮箱后可创建公司。手机号暂不验证，不用于登录或找回密码。公司管理员可批量导入成员并发送激活链接；每个账号最多加入一家企业。使用流程、重复核验规则及迁移步骤见 [开放注册说明](docs/OPEN_REGISTRATION.md)。
 
 2026-09-05 实施更新：已接入真实持久化的模拟 SaaS 配置/成员、材料绑定审批、交付物、异步执行适配与知识管理。当前测试、实现边界及未完成事项见 [全流程实施记录](docs/DELIVERY_IMPLEMENTATION.md)，隔离部署见 [预生产运行手册](docs/PREPRODUCTION_RUNBOOK.md)。本地测试通过不代表预生产和真实模型已验收。
 
@@ -57,7 +65,7 @@ flowchart LR
 
 ### 分层职责
 
-1. `web/` 负责客户工作台、公司设置、平台后台、认证页面和执行详情。
+1. `frontend/` 负责客户工作台、公司设置、平台后台、认证页面和执行详情。
 2. `backend/main.py` 组装 FastAPI 应用、中间件、核心项目 API、Run、审批、导入和 SSE。
 3. 各路由模块分别处理认证、公司治理、平台治理、项目授权和支持访问，避免平台权限与客户权限混用。
 4. `backend/permissions.py` 从数据库角色目录计算权限，并统一执行租户、项目、职责分离和防枚举检查。
@@ -66,6 +74,8 @@ flowchart LR
 7. PostgreSQL RLS 为核心项目数据提供第二层租户隔离；应用层仍会在查询和写入前执行权限校验。
 
 ## 目录结构
+
+目录职责、缓存清理边界与迁移检查见 [仓库目录管理](docs/REPOSITORY_LAYOUT.md)。前端统一放在 `frontend/`，部署与监控脚本放在 `scripts/`，说明文档放在 `docs/`。
 
 ```text
 .
@@ -86,7 +96,7 @@ flowchart LR
 │  ├─ cleanup.py                 # 过期软删除项目清理任务
 │  ├─ models.py                  # SQLAlchemy 数据模型
 │  └─ schemas.py                 # API 与工作流 Pydantic 模型
-├─ web/
+├─ frontend/
 │  ├─ src/views/                 # 客户端、公司端、平台端页面
 │  ├─ src/api.ts                 # API 客户端与 CSRF/幂等请求封装
 │  ├─ src/auth.ts                # 前端认证状态
@@ -96,7 +106,8 @@ flowchart LR
 ├─ evaluations/                  # 确定性评估用例
 ├─ knowledge/                    # 知识检索扩展说明
 ├─ skills/                       # 项目文书 Skill 定义及结构化模板
-├─ ops/                          # Prometheus、备份和恢复脚本
+├─ docs/                         # 项目说明与运行手册
+├─ scripts/                          # Prometheus、备份和恢复脚本
 ├─ Dockerfile                    # API 镜像
 └─ docker-compose.yml            # API、Web、PostgreSQL、Redis 与监控服务
 ```
@@ -337,7 +348,7 @@ Vite 开发服务器会把 `/api` 和 `/health` 代理到后端服务。
 - 项目及 Run、步骤、审批、导入等核心子表在 PostgreSQL 中启用 RLS，应用层权限校验仍是第一道边界。
 - 幂等记录使用租户、操作范围和幂等键组合去重。
 - 项目默认软删除并保留 30 天；生产调度器应每日调用 `backend.cleanup.purge_expired_projects`。
-- `ops/backup.sh` 创建 PostgreSQL custom-format 备份并按保留期清理；`ops/restore.sh` 用于恢复后执行迁移。
+- `scripts/backup.sh` 创建 PostgreSQL custom-format 备份并按保留期清理；`scripts/restore.sh` 用于恢复后执行迁移。
 - 备份文件必须写入版本库之外的受控存储，并定期在隔离环境执行恢复演练。
 
 ## 测试与质量检查
@@ -363,7 +374,7 @@ npm run build
 ## 当前实现边界
 
 - 工作流节点目前使用确定性逻辑，适合离线演示和稳定测试，不等同于已经接入通用大模型。
-- 知识库当前内嵌在 `backend/rag.py`；生产可替换为 PostgreSQL 全文检索与 pgvector，同时保持 `search()` 的返回契约。
+- `backend/rag.py` 保留离线演示语料；公司知识由独立服务执行分块检索，PostgreSQL 使用全文索引与 pgvector，SQLite 使用词项检索。真实模型质量与领域人工标注仍需验收。
 - 邮件支持事务入队和 SMTP；调试模式仅返回预览链接，不向日志写入一次性令牌。
 - Celery/Outbox/LangGraph、S3 与基础告警已有适配和预生产配置；真实依赖的故障验收尚未完成。企业 OIDC/SSO、PITR 和完整告警通知仍需补充。
 - 管理后台不提供任意 SQL 或底层表编辑能力，以避免绕过授权与审计。

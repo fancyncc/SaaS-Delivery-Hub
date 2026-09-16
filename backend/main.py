@@ -25,6 +25,7 @@ from backend.access import (
 from backend.admin_routes import router as company_router
 from backend.audit import audit_event
 from backend.auth_routes import router as auth_router
+from backend.chat_routes import router as chat_router
 from backend.config import get_settings
 from backend.db import bootstrap_identity, get_session, init_db
 from backend.delivery_routes import router as delivery_router
@@ -46,6 +47,7 @@ from backend.models import (
 from backend.onboarding import router as onboarding_router
 from backend.platform_routes import router as platform_router
 from backend.project_access_routes import router as project_access_router
+from backend.retrieval_status import router as retrieval_status_router
 from backend.schemas import (
     ApprovalDecision,
     Envelope,
@@ -78,7 +80,16 @@ async def lifespan(_: FastAPI):
     setup()
     await init_db()
     await bootstrap_identity()
-    yield
+    task = None
+    if get_settings().local_indexer_enabled and get_settings().rag_mode == "real":
+        from backend.local_indexer import maintain_indexes
+        task = asyncio.create_task(maintain_indexes())
+    try:
+        yield
+    finally:
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
 
 
 app = FastAPI(title=get_settings().app_name, version="1.0.0", lifespan=lifespan)
@@ -124,6 +135,10 @@ app.include_router(support_router)
 app.include_router(platform_support_router)
 app.include_router(delivery_router)
 app.include_router(knowledge_router)
+app.include_router(chat_router)
+from backend.chat_mcp import router as mcp_router
+app.include_router(mcp_router)
+app.include_router(retrieval_status_router)
 
 
 @app.exception_handler(IntegrityError)
@@ -163,7 +178,7 @@ async def project_summary(session: AsyncSession, project: Project, user: Princip
         latest_approval = await session.scalar(select(Approval).where(Approval.run_id == latest_run.id, Approval.tenant_id == project.tenant_id).order_by(Approval.created_at.desc()).limit(1))
     status = project.lifecycle_status
     permissions = sorted(access["permissions"])
-    active_run = bool(latest_run and latest_run.status in {"pending", "running", "waiting_approval", "preparing_materials"})
+    active_run = bool(latest_run and latest_run.status in {"pending", "running", "waiting_approval", "preparing_materials", "blocked"})
     start_permission = "run.retry" if status == "blocked" else "run.start"
     return {
         "id": project.id, "name": project.name, "customer_name": project.customer_name,
@@ -233,6 +248,9 @@ async def create_project(payload: ProjectCreate, request: Request, key: str = De
     session.add(project)
     await session.flush()
     session.add(ProjectDocument(tenant_id=user.tenant_id, project_id=project.id, content=document))
+    if get_settings().rag_mode == "real":
+        from backend.retrieval_sources import sync_project
+        await sync_project(session, project)
     session.add(ProjectMembership(
         project_id=project.id,
         tenant_id=user.tenant_id,
@@ -273,7 +291,7 @@ async def get_project(project_id: UUID, request: Request, user: Principal = Depe
 
 @app.get("/api/tasks")
 async def my_tasks(request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
-    runs = (await session.scalars(select(AgentRun).join(Project, AgentRun.project_id == Project.id).where(accessible_project_filter(user), Project.deleted_at.is_(None), AgentRun.status.in_(["preparing_materials", "waiting_approval", "failed", "cancelled"])).order_by(AgentRun.updated_at.desc()))).all()
+    runs = (await session.scalars(select(AgentRun).join(Project, AgentRun.project_id == Project.id).where(accessible_project_filter(user), Project.deleted_at.is_(None), AgentRun.status.in_(["preparing_materials", "waiting_approval", "blocked", "failed", "cancelled"])).order_by(AgentRun.updated_at.desc()))).all()
     tasks = []
     for run in runs:
         latest = await session.scalar(select(func.max(AgentRun.run_number)).where(AgentRun.project_id == run.project_id))
@@ -312,7 +330,7 @@ async def start_run(project_id: UUID, request: Request, key: str = Depends(idemp
     latest_run = await session.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.tenant_id == project.tenant_id).order_by(AgentRun.run_number.desc()).limit(1))
     if project.lifecycle_status in {"completed", "cancelled", "archived"}:
         raise HTTPException(409, "已完成的项目不能再次启动 Agent")
-    if latest_run and latest_run.status in {"pending", "running", "waiting_approval", "preparing_materials"}:
+    if latest_run and latest_run.status in {"pending", "running", "waiting_approval", "preparing_materials", "blocked"}:
         raise HTTPException(409, "该项目已有进行中的 Agent，请进入执行详情查看")
     transition_project(project, ProjectLifecycle.IN_PROGRESS)
     next_run_number = (await session.scalar(
@@ -330,7 +348,7 @@ async def start_run(project_id: UUID, request: Request, key: str = Depends(idemp
     await session.flush()
     if get_settings().execution_mode == "inline":
         transition_run(run, RunLifecycle.RUNNING)
-    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status)).model_dump(mode="json")
+    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status), engine_version=get_settings().agent_engine).model_dump(mode="json")
     await session.flush()
     await dispatch(session, run)
     data = {"id": run.id, "run_number": run.run_number, "retry_of_run_id": run.retry_of_run_id,
@@ -357,7 +375,7 @@ async def cancel_run(
     locked_run = await session.scalar(
         select(AgentRun).where(AgentRun.id == str(run_id)).with_for_update()
     )
-    if not locked_run or locked_run.status not in {"pending", "running", "waiting_approval", "preparing_materials"}:
+    if not locked_run or locked_run.status not in {"pending", "running", "waiting_approval", "preparing_materials", "blocked"}:
         raise HTTPException(409, "只有进行中的 Run 可以取消")
     run = locked_run
 
@@ -395,6 +413,45 @@ async def cancel_run(
     return envelope(request, data)
 
 
+from backend.schemas import ResumeRequest
+
+
+@app.post("/api/runs/{run_id}/resume")
+async def resume_run(run_id: UUID, payload: ResumeRequest, request: Request, key: str = Depends(idempotency_key), user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
+    from backend.agent_loop import REGISTRY, authorize
+    from backend.agent_models import AgentAction
+    run = await run_or_404(session, str(run_id), user)
+    project = await project_or_404(session, run.project_id, user)
+    await require_project_permission(session, project, user, "run.retry")
+    existing = await idempotent(session, user, "resume_run", key)
+    if existing:
+        return envelope(request, existing.response)
+    locked = await session.scalar(select(AgentRun).where(AgentRun.id == str(run_id)).with_for_update().execution_options(populate_existing=True))
+    if not locked or locked.status != "blocked" or locked.state.get("engine_version") != "v2" or locked.version != payload.expected_version:
+        raise HTTPException(409, "任务不可恢复或版本已变化，请刷新")
+    run = locked
+    await authorize(session, run, REGISTRY["create_project"])
+    unknown = await session.scalar(select(AgentAction.id).where(AgentAction.run_id == run.id, AgentAction.status == "started").limit(1))
+    if unknown:
+        raise HTTPException(409, "存在执行状态不明的动作，请先核对执行凭证")
+    state = ImplementationGraphState.model_validate(run.state)
+    state.agent.resume_count += 1
+    state.agent.rounds, state.agent.replans, state.agent.retries = 0, 0, {}
+    # Budget remains cumulative across resumes. Operators must explicitly raise
+    # the configured budget if the original allocation has been consumed.
+    state.agent.evaluation = None
+    state.status, state.blocking_reason = RunStatus.RUNNING, None
+    transition_run(run, RunLifecycle.RUNNING)
+    transition_project(project, ProjectLifecycle.IN_PROGRESS)
+    run.state = state.model_dump(mode="json")
+    session.add(audit_event(request, user, "run.resumed", run.id, {"reason": payload.reason, "resume_count": state.agent.resume_count}))
+    await dispatch(session, run)
+    data = {"id": run.id, "status": run.status, "version": run.version}
+    session.add(IdempotencyRecord(tenant_id=user.tenant_id, scope="resume_run", key=key, response=data))
+    await session.commit()
+    return envelope(request, data)
+
+
 @app.get("/api/runs/{run_id}")
 async def get_run(run_id: UUID, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
     run = await run_or_404(session, str(run_id), user)
@@ -414,6 +471,15 @@ async def get_run_steps(run_id: UUID, request: Request, user: Principal = Depend
     return envelope(request, [{"id": x.id, "sequence": x.sequence, "node": x.node,
                                "status": x.status, "detail": x.detail,
                                "created_at": x.created_at.isoformat()} for x in rows])
+
+
+@app.get("/api/runs/{run_id}/actions")
+async def get_run_actions(run_id: UUID, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
+    from backend.agent_models import AgentAction
+    run = await run_or_404(session, str(run_id), user)
+    rows = (await session.scalars(select(AgentAction).where(AgentAction.run_id == run.id, AgentAction.tenant_id == run.tenant_id).order_by(AgentAction.created_at, AgentAction.id))).all()
+    return envelope(request, [{"id": a.id, "stage": a.stage, "milestone_id": a.milestone_id, "tool": a.tool,
+        "status": a.status, "result": a.result, "created_at": a.created_at.isoformat()} for a in rows])
 
 
 @app.get("/api/runs/{run_id}/events")
@@ -578,7 +644,8 @@ async def run_actions(session: AsyncSession, run: AgentRun, user: Principal) -> 
                                  and owner_space.personal_owner_id == user.user_id and project.tenant_id == user.tenant_id)
     for action, permission, available in (
         ("upload_csv", "import.validate", run.status == "preparing_materials"),
-        ("cancel", "run.cancel", run.status in {"pending", "running", "preparing_materials", "waiting_approval"}),
+        ("cancel", "run.cancel", run.status in {"pending", "running", "preparing_materials", "waiting_approval", "blocked"}),
+        ("resume", "run.retry", run.status == "blocked" and run.state.get("engine_version") == "v2"),
         ("approve", "approval.decide", run.status == "waiting_approval" and (run.started_by != user.user_id or personal_confirmation)),
         ("retry", "run.retry", run.status in {"failed", "cancelled"}),
     ):

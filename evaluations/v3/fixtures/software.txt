@@ -1,0 +1,11 @@
+构建任务 / build job
+
+id: BUILD-204
+
+limit: 67
+
+conditions: 重试必须使用原请求标识；取消的任务不得自动重试。 Reuse the original request identifier for retry; cancelled jobs must not retry automatically.
+
+fields: id, owner, created_at, status
+
+distractor: ARCHIVE-999 uses a separate limit of 999. 此限制不适用于当前对象。

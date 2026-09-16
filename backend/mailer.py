@@ -4,7 +4,7 @@ import asyncio
 import smtplib
 from email.message import EmailMessage
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -46,17 +46,28 @@ def smtp_send(item: MailDelivery) -> None:
 async def flush_mail() -> None:
     engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
     try:
-        async with async_sessionmaker(engine)() as session:
-            items = (await session.scalars(select(MailDelivery).where(MailDelivery.status == "queued").limit(30).with_for_update(skip_locked=True))).all()
-            for item in items:
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with factory() as session:
+            identifiers = list(await session.scalars(select(MailDelivery.id).where(MailDelivery.status == "queued").limit(30)))
+        for identifier in identifiers:
+            async with factory() as session:
+                # Commit ownership BEFORE SMTP. A crash leaves an unresolved
+                # attempt which must never be automatically resent.
+                claimed = await session.execute(update(MailDelivery).where(
+                    MailDelivery.id == identifier, MailDelivery.status == "queued",
+                ).values(status="sending", attempts=MailDelivery.attempts + 1))
+                if not claimed.rowcount:
+                    continue
+                await session.commit()
+                item = await session.get(MailDelivery, identifier)
                 try:
                     await asyncio.to_thread(smtp_send, item)
                     item.status, item.body = "sent", ""
                 except Exception as exc:
-                    item.attempts += 1
+                    # SMTP can accept DATA before the connection fails. Neither
+                    # an exception nor Message-ID proves delivery did not occur.
                     item.last_error = type(exc).__name__
-                    if item.attempts >= 3:
-                        item.status, item.body = "failed", ""
-            await session.commit()
+                    item.status, item.body = "unknown", ""
+                await session.commit()
     finally:
         await engine.dispose()

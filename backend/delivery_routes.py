@@ -157,7 +157,7 @@ async def retry_failed_rows(job_id: UUID, payload: FailedRowsRetry, request: Req
     transition_project(project, ProjectLifecycle.IN_PROGRESS)
     if get_settings().execution_mode == "inline":
         transition_run(run, RunLifecycle.RUNNING)
-    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status), import_job_id=UUID(new_job.id)).model_dump(mode="json")
+    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status), import_job_id=UUID(new_job.id), engine_version=get_settings().agent_engine).model_dump(mode="json")
     await dispatch(session, run)
     data = {"run_id": run.id, "job_id": new_job.id}
     session.add(IdempotencyRecord(tenant_id=user.tenant_id, scope=scope, key=key, response=data))
@@ -173,6 +173,45 @@ class MaterialRevision(BaseModel):
     acceptance_criteria: str = Field(max_length=2000)
 
 
+from backend.schemas import ProjectCreate
+
+
+class ProjectRevision(ProjectCreate):
+    expected_version: int = Field(ge=1)
+
+
+@router.patch("/projects/{project_id}")
+async def revise_project(project_id: UUID, payload: ProjectRevision, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
+    from backend.models import ProjectDocument
+    from backend.config import get_settings
+    project = await authorized_project(session, project_id, user, "project.edit")
+    await session.refresh(project, with_for_update=True)
+    if project.lifecycle_status in {"completed", "archived"}:
+        raise HTTPException(409, "已完成或已归档项目为只读")
+    if project.version != payload.expected_version:
+        raise HTTPException(409, "项目已被更新，请刷新后重试")
+    active = await session.scalar(select(AgentRun.id).where(AgentRun.project_id == project.id,
+        AgentRun.status.in_(["pending", "running", "preparing_materials", "waiting_approval", "blocked"])).limit(1))
+    if active:
+        raise HTTPException(409, "请先取消当前执行，再保存修改并重新发起审批")
+    doc = await session.scalar(select(ProjectDocument).where(ProjectDocument.project_id == project.id))
+    if doc is None:
+        raise HTTPException(409, "项目文书缺失")
+    before = dict(doc.content)
+    # Company ownership and collaborations have their own permission-controlled APIs.
+    values = payload.model_dump(mode="json", exclude={"expected_version", "company_id", "assisting_company_id", "customer_name"})
+    project.name = payload.name
+    project.requirements_text = payload.requirements_text
+    project.version += 1
+    doc.content = {**doc.content, **values, "customer_name": project.customer_name}
+    if get_settings().rag_mode == "real":
+        from backend.retrieval_sources import sync_project
+        await sync_project(session, project)
+    session.add(audit_event(request, user, "project.details_revised", project.id, {"before": before, "after": doc.content}))
+    await session.commit()
+    return {"data": {"id": project.id, "version": project.version}}
+
+
 @router.patch("/projects/{project_id}/materials")
 async def revise_materials(project_id: UUID, payload: MaterialRevision, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
     from backend.models import ProjectDocument
@@ -180,6 +219,9 @@ async def revise_materials(project_id: UUID, payload: MaterialRevision, request:
     await session.refresh(project, with_for_update=True)
     if project.lifecycle_status not in {"draft", "ready", "blocked"} or project.version != payload.expected_version:
         raise HTTPException(409, "仅能修订未启动或已阻塞项目，请刷新项目版本")
+    active_agent = await session.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.status == "blocked").limit(1))
+    if active_agent and active_agent.state.get("engine_version") == "v2":
+        raise HTTPException(409, "修改已审批流程的原始需求需先取消当前 Run，再修订材料并创建新 Run 重新审批")
     if len(payload.requirements_text.strip()) < 20:
         raise HTTPException(422, "具体需求至少 20 字")
     doc = await session.scalar(select(ProjectDocument).where(ProjectDocument.project_id == project.id))
@@ -189,6 +231,10 @@ async def revise_materials(project_id: UUID, payload: MaterialRevision, request:
     project.requirements_text = payload.requirements_text.strip()
     project.version += 1
     doc.content = {**doc.content, **payload.model_dump(exclude={"expected_version"}), "requirements_text": project.requirements_text}
+    from backend.config import get_settings
+    if get_settings().rag_mode == "real":
+        from backend.retrieval_sources import sync_project
+        await sync_project(session, project)
     session.add(audit_event(request, user, "project.materials_revised", project.id, {"before": before, "after": doc.content}))
     await session.commit()
     return {"data": {"id": project.id, "version": project.version}}

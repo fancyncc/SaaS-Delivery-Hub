@@ -1,0 +1,11 @@
+FROM python:3.11-slim
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
+COPY pyproject.toml ./
+RUN mkdir -p backend && touch backend/__init__.py \
+    && pip install --no-cache-dir 'torch>=2.6,<3' --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir '.[rag-local]'
+COPY backend backend
+COPY scripts/download_rag_models.py /app/scripts/download_rag_models.py
+ENV RETRIEVAL_MODEL_CACHE=/models HF_HUB_DISABLE_TELEMETRY=1
+CMD ["uvicorn", "backend.retrieval_server:app", "--host", "0.0.0.0", "--port", "8010", "--workers", "1"]

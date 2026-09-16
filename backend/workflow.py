@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend import delivery
 from backend.config import get_settings
 from backend.intelligence import PROMPT_VERSION, ExtractedRequirements, GapAssessment, structured
-from backend.knowledge_routes import retrieve
+from backend.knowledge import retrieve
 from backend.models import AgentRun, AgentStep, Approval, ImportJob, Project
 from backend.schemas import (
     ApprovalKind,
@@ -81,6 +81,17 @@ async def _record(session: AsyncSession, run: AgentRun, node: str, detail: dict)
 
 
 async def advance(session: AsyncSession, run: AgentRun, *, one_node: bool = False) -> AgentRun:
+    if run.state.get("engine_version", "legacy") != "v2":
+        return await advance_legacy(session, run, one_node=one_node)
+    from backend.agent_loop import advance_round
+    while run.status == "running":
+        await advance_round(session, run)
+        if one_node:
+            break
+    return run
+
+
+async def advance_legacy(session: AsyncSession, run: AgentRun, *, one_node: bool = False) -> AgentRun:
     if run.status != "running":
         raise HTTPException(409, "只有运行中的任务可以推进")
     state = ImplementationGraphState.model_validate(run.state)
@@ -104,11 +115,11 @@ async def advance(session: AsyncSession, run: AgentRun, *, one_node: bool = Fals
             detail = {"count": len(state.requirements), "agent": "Requirement Agent", "prompt_version": PROMPT_VERSION, "mode": get_settings().model_mode}
         elif node == "retrieve_product_knowledge":
             query = " ".join(r.statement for r in state.requirements)
-            detail = {"citations": await retrieve(session, project.tenant_id, query)}
+            detail = {"citations": await retrieve(session, project.tenant_id, query, project_ids=[project.id])}
         elif node == "gap_analysis":
             items = []
             for req in state.requirements:
-                evidence = await retrieve(session, project.tenant_id, req.statement, limit=2)
+                evidence = await retrieve(session, project.tenant_id, req.statement, limit=2, project_ids=[project.id])
                 items.append(GapAnalysisItem(requirement=req.statement, capability=evidence[0]["title"] if evidence else None,
                     fit="human_review", evidence_ids=[e["id"] for e in evidence],
                     recommendation="已召回候选资料，请独立核对能力适配" if evidence else "证据不足，转人工确认"))
@@ -161,8 +172,8 @@ async def advance(session: AsyncSession, run: AgentRun, *, one_node: bool = Fals
             await delivery.artifact(session, project, run, "acceptance", "上线验收报告", state.acceptance_report.model_dump_json(indent=2))
             if not state.acceptance_report.ready:
                 state.blocking_reason = "；".join(state.acceptance_report.blockers)
-                state.status = RunStatus.FAILED
-                transition_run(run, RunLifecycle.FAILED)
+                state.status = RunStatus.BLOCKED if state.engine_version == "v2" else RunStatus.FAILED
+                transition_run(run, RunLifecycle.BLOCKED if state.engine_version == "v2" else RunLifecycle.FAILED)
                 transition_project(project, ProjectLifecycle.BLOCKED)
                 await _record(session, run, node, state.acceptance_report.model_dump())
                 run.state = state.model_dump(mode="json")

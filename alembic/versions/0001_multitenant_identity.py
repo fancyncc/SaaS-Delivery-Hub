@@ -30,7 +30,10 @@ def _columns(inspector, table: str) -> set[str]:
 def upgrade() -> None:
     bind = op.get_bind()
     # Creates all new identity tables on legacy databases and the complete schema on fresh databases.
-    Base.metadata.create_all(bind=bind)
+    # Agent tables require the pgvector extension installed by migration 0012.
+    # Do not let the current ORM metadata create future vector tables early.
+    Base.metadata.create_all(bind=bind, tables=[table for table in Base.metadata.sorted_tables
+        if table.name not in {"knowledge_chunks", "agent_actions", "agent_memories"}])
     inspector = sa.inspect(bind)
     tables = set(inspector.get_table_names())
 

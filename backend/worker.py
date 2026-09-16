@@ -26,7 +26,8 @@ celery = Celery("implementation", broker=get_settings().redis_url)
 celery.conf.update(
     task_acks_late=True, task_reject_on_worker_lost=True, worker_prefetch_multiplier=1,
     task_soft_time_limit=240, task_time_limit=300,
-    beat_schedule={"outbox": {"task": "implementation.dispatch", "schedule": 2.0}, "mail": {"task": "implementation.mail", "schedule": 10.0}},
+    task_routes={"implementation.knowledge": {"queue": "indexing"}},
+    beat_schedule={"outbox": {"task": "implementation.dispatch", "schedule": 2.0}, "mail": {"task": "implementation.mail", "schedule": 10.0}, "knowledge": {"task": "implementation.knowledge", "schedule": 10.0}},
 )
 
 
@@ -99,7 +100,7 @@ async def process_event(event_id: str, *, checkpointer=None, raise_errors: bool 
                     graph.add_conditional_edges(node, lambda cursor: cursor["next"])
                 graph.add_conditional_edges(START, lambda cursor: cursor["next"])
                 compiled = graph.compile(checkpointer=checkpointer or InMemorySaver())
-                await compiled.ainvoke({"next": initial}, {"configurable": {"thread_id": event.id}}, durability="sync")
+                await compiled.ainvoke({"next": initial}, {"configurable": {"thread_id": event.id}, "recursion_limit": 600}, durability="sync")
                 event.processed = True
                 event.last_error = ""
             except Exception as exc:
@@ -180,6 +181,38 @@ async def setup_checkpoints():
     from backend.db_role import owner_url
     async with AsyncPostgresSaver.from_conn_string(owner_url()) as saver:
         await saver.setup()
+
+
+async def index_knowledge():
+    from backend.knowledge import process_pending
+    from backend.retrieval_sources import process_sources
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        async with factory() as session:
+            tenants = list(await session.scalars(select(Tenant.id).where(Tenant.status == "active")))
+        for tenant_id in tenants:
+            async with factory() as session:
+                if session.bind.dialect.name == "postgresql":
+                    await session.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": tenant_id})
+                    # Tenant indexing is a service operation over all registered
+                    # origins; end-user visibility is checked at retrieval time.
+                    await session.execute(text("SELECT set_config('app.current_company_role', 'company_admin', true)"))
+                if get_settings().rag_mode == "real":
+                    await process_sources(session, tenant_id)
+                else:
+                    await process_pending(session, tenant_id)
+                if get_settings().rag_v3_indexing_enabled:
+                    from backend.rag_v3_index import process
+                    await process(session, tenant_id)
+                await session.commit()
+    finally:
+        await engine.dispose()
+
+
+@celery.task(name="implementation.knowledge")
+def build_knowledge_indexes():
+    asyncio.run(index_knowledge())
 
 
 if __name__ == "__main__":

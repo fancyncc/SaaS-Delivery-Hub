@@ -1,0 +1,14 @@
+{
+  "embedding_mode": "online",
+  "embedding_model": "BAAI/bge-m3",
+  "embedding_base_url": "http://127.0.0.1:8011/v1",
+  "embedding_revision": "REPLACE_WITH_VERIFIED_40_CHARACTER_WEIGHT_COMMIT",
+  "embedding_dimensions": 1024,
+  "embedding_query_style": "none",
+  "embedding_query_instruction": "",
+  "reranker_mode": "online",
+  "reranker_model": "BAAI/bge-reranker-v2-m3",
+  "reranker_base_url": "http://127.0.0.1:8011/v1",
+  "reranker_revision": "REPLACE_WITH_VERIFIED_40_CHARACTER_WEIGHT_COMMIT",
+  "reranker_max_length": 512
+}

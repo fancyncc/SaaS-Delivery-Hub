@@ -1,0 +1,6 @@
+# Local dependencies only; the existing host API keeps its port and frontend.
+services:
+  opensearch:
+    ports: ["127.0.0.1:9200:9200"]
+  retrieval:
+    ports: ["127.0.0.1:8010:8010"]

@@ -85,6 +85,7 @@ async def test_legacy_email_verification_required(client):
     # The fixture user already has an enterprise; verification must still be explicit.
     me = (await client.get("/api/auth/me")).json()["data"]
     assert not me["email_verified"]
+    assert me["company_creation_requires_verified_email"]
     assert (await client.post("/api/companies", headers=headers(client), json={"name": "公司名称", "slug": "legacy-new"})).status_code == 403
     sent = await client.post("/api/auth/email-verification", headers=headers(client))
     raw = token(sent.json()["data"]["verification_url"])

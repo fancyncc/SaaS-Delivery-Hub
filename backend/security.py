@@ -130,6 +130,13 @@ async def current_principal(
             raise HTTPException(401, "个人空间不可用")
         role = Role.TENANT_ADMIN if membership.company_role_code == "company_admin" else Role.TENANT_MEMBER
     if session.bind and session.bind.dialect.name == "postgresql":
+        session.info["rls_context"] = {
+            "app.current_user_id": user.id,
+            "app.current_tenant_id": tenant.id if tenant else "",
+            "app.current_company_role": membership.company_role_code if membership else "",
+            "app.is_platform_admin": "true" if is_platform_admin else "false",
+            "app.platform_roles": ",".join(platform_roles),
+        }
         await session.execute(text("SELECT set_config('app.current_user_id', :value, true)"), {"value": user.id})
         await session.execute(text("SELECT set_config('app.current_tenant_id', :value, true)"), {"value": tenant.id if tenant else ""})
         await session.execute(text("SELECT set_config('app.current_company_role', :value, true)"), {"value": membership.company_role_code if membership else ""})

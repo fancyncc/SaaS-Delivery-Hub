@@ -8,14 +8,18 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
+from backend import agent_models  # noqa: F401
+from backend import chat_models  # noqa: F401
+from backend import rag_v3_models  # noqa: F401
 from backend.config import get_settings
 from backend.models import Base
+from backend.retrieval_sources_models import RetrievalBase
 
 config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-target_metadata = Base.metadata
+target_metadata = [Base.metadata, RetrievalBase.metadata]
 
 
 def run_migrations_offline() -> None:

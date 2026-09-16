@@ -354,8 +354,11 @@ class AgentRun(Base):
     __tablename__ = "agent_runs"
     __table_args__ = (
         UniqueConstraint("project_id", "run_number", name="uq_agent_run_project_number"),
+        Index("uq_agent_run_active_project", "project_id", unique=True,
+              postgresql_where=text("status IN ('pending','running','preparing_materials','waiting_approval','blocked')"),
+              sqlite_where=text("status IN ('pending','running','preparing_materials','waiting_approval','blocked')")),
         CheckConstraint(
-            "status IN ('pending','running','preparing_materials','waiting_approval','succeeded','failed','cancelled')",
+            "status IN ('pending','running','preparing_materials','waiting_approval','succeeded','failed','cancelled','blocked')",
             name="ck_agent_run_status",
         ),
     )
@@ -524,6 +527,7 @@ class KnowledgeDocument(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "title", "version"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
+    project_id: Mapped[str | None] = mapped_column(ForeignKey("implementation_projects.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(160))
     version: Mapped[int] = mapped_column(Integer)
     module: Mapped[str] = mapped_column(String(60))
@@ -533,6 +537,10 @@ class KnowledgeDocument(Base):
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     embedding: Mapped[list | None] = mapped_column(JSON, nullable=True)
     embedding_model: Mapped[str] = mapped_column(String(120), default="")
+    index_status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    index_attempts: Mapped[int] = mapped_column(Integer, default=0)
+    index_error: Mapped[str] = mapped_column(String(100), default="")
+    index_version: Mapped[str] = mapped_column(String(160), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 

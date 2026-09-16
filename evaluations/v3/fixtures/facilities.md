@@ -1,0 +1,11 @@
+# 设备巡检 / equipment inspection
+
+id: ASSET-204
+
+limit: 31
+
+conditions: 巡检前必须停机；紧急停机不受排期限制。 Stop equipment before inspection; emergency shutdown is exempt from scheduling.
+
+fields: id, owner, created_at, status
+
+distractor: ARCHIVE-999 uses a separate limit of 999. 此限制不适用于当前对象。

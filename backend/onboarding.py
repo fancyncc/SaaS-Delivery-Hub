@@ -357,7 +357,7 @@ async def create_company(payload: CompanyRequest, request: Request, principal: P
     user = await session.scalar(select(User).where(User.id == principal.user_id).with_for_update())
     if not user:
         raise HTTPException(401, "账号不可用")
-    if not user.email_verified_at:
+    if get_settings().require_verified_email_for_company and not user.email_verified_at:
         raise HTTPException(403, "请先验证邮箱")
     if await active_company(session, user.id):
         raise HTTPException(409, "一个账号最多加入一家企业")

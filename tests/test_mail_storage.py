@@ -18,8 +18,30 @@ async def test_mail_delivery_tracks_failure_and_removes_token(monkeypatch):
         await mailer.flush_mail()
     async with SessionLocal() as session:
         item = await session.scalar(select(MailDelivery))
-        assert item.status == "failed" and item.attempts == 3
+        assert item.status == "unknown" and item.attempts == 1
         assert item.body == "" and item.last_error == "ConnectionError"
+
+
+async def test_mail_crash_after_acceptance_is_not_replayed(monkeypatch):
+    monkeypatch.setattr(get_settings(), "mail_debug", False)
+    await mailer.send_account_link("test@example.test", "invitation", "https://example.test/link")
+    accepted = []
+
+    class WorkerLost(BaseException):
+        pass
+
+    def accepted_then_crashed(item):
+        accepted.append(item.id)
+        raise WorkerLost()
+
+    monkeypatch.setattr(mailer, "smtp_send", accepted_then_crashed)
+    with pytest.raises(WorkerLost):
+        await mailer.flush_mail()
+    await mailer.flush_mail()
+    async with SessionLocal() as session:
+        item = await session.scalar(select(MailDelivery))
+        assert item.status == "sending" and item.attempts == 1
+    assert len(accepted) == 1
 
 
 async def test_corrupt_object_is_not_delivered(monkeypatch):

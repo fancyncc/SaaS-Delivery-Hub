@@ -25,7 +25,8 @@ secrets*.json
 docs
 tests
 backups
-ops
+scripts/*
+!scripts/download_rag_models.py
 skills
 README.md
 
@@ -54,10 +55,11 @@ dist
 *.log
 data
 uploads
+knowledge/models
 logs
 
 # The API image does not use the frontend source tree
-web
+frontend
 
 # Temporary and operating-system files
 .DS_Store

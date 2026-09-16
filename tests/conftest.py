@@ -4,6 +4,8 @@ from pathlib import Path
 TEST_DB = Path(__file__).parent / "test.db"
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB.as_posix()}"
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6399/15"
+os.environ["MODEL_MODE"] = "deterministic"
+os.environ["RAG_MODE"] = "mock"
 os.environ["BOOTSTRAP_ADMIN_EMAIL"] = "admin@example.com"
 os.environ["BOOTSTRAP_ADMIN_PASSWORD"] = "ChangeMe123!"
 
@@ -14,6 +16,7 @@ from sqlalchemy import select
 from backend.db import SessionLocal, bootstrap_identity, engine
 from backend.main import app
 from backend.models import Base, Tenant, TenantMembership, User
+from backend.retrieval_sources_models import RetrievalBase
 from backend.rate_limit import _fallback
 from backend.security import hash_password
 
@@ -22,8 +25,10 @@ from backend.security import hash_password
 async def database():
     _fallback.clear()
     async with engine.begin() as conn:
+        await conn.run_sync(RetrievalBase.metadata.drop_all)
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(RetrievalBase.metadata.create_all)
     await bootstrap_identity()
     async with SessionLocal() as session:
         tenant = await session.scalar(select(Tenant).where(Tenant.slug == "legacy-demo"))

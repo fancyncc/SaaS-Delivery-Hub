@@ -20,6 +20,7 @@ class ProjectLifecycle(StrEnum):
 
 
 class RunLifecycle(StrEnum):
+    BLOCKED = "blocked"
     PREPARING_MATERIALS = "preparing_materials"
     PENDING = "pending"
     RUNNING = "running"
@@ -40,8 +41,9 @@ PROJECT_TRANSITIONS: dict[str, frozenset[str]] = {
 }
 
 RUN_TRANSITIONS: dict[str, frozenset[str]] = {
+    RunLifecycle.BLOCKED: frozenset({RunLifecycle.RUNNING, RunLifecycle.CANCELLED}),
     RunLifecycle.PENDING: frozenset({RunLifecycle.RUNNING, RunLifecycle.CANCELLED}),
-    RunLifecycle.RUNNING: frozenset({RunLifecycle.PREPARING_MATERIALS, RunLifecycle.WAITING_APPROVAL, RunLifecycle.SUCCEEDED, RunLifecycle.FAILED, RunLifecycle.CANCELLED}),
+    RunLifecycle.RUNNING: frozenset({RunLifecycle.BLOCKED, RunLifecycle.PREPARING_MATERIALS, RunLifecycle.WAITING_APPROVAL, RunLifecycle.SUCCEEDED, RunLifecycle.FAILED, RunLifecycle.CANCELLED}),
     RunLifecycle.PREPARING_MATERIALS: frozenset({RunLifecycle.RUNNING, RunLifecycle.FAILED, RunLifecycle.CANCELLED}),
     RunLifecycle.WAITING_APPROVAL: frozenset({RunLifecycle.RUNNING, RunLifecycle.FAILED, RunLifecycle.CANCELLED}),
     RunLifecycle.SUCCEEDED: frozenset(),

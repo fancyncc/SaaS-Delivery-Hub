@@ -1,0 +1,11 @@
+# 稿件审阅 / manuscript review
+
+id: DRAFT-204
+
+limit: 41
+
+conditions: 发布前必须复核；撤回稿件不得发布。 Review before publication; withdrawn manuscripts must not be published.
+
+fields: id, owner, created_at, status
+
+distractor: ARCHIVE-999 uses a separate limit of 999. 此限制不适用于当前对象。

@@ -1,0 +1,22 @@
+{
+  "release_enabled": false,
+  "quality_evaluation_completed": false,
+  "independent_review_completed": false,
+  "model_comparison_completed": false,
+  "synthetic_boundary_questions": 120,
+  "failures": [
+    "Independent review and additional diverse source annotations are pending",
+    "Two pinned model combinations have not completed paired evaluation",
+    "Relevance classifier has not been trained on independently reviewed calibration labels",
+    "Locked validation coverage, no-answer errors and warm latency gates have not been measured"
+  ],
+  "smoke_test": {
+    "real_services": true,
+    "scope": "CSV parsing, isolated SQL/OpenSearch indexing, three recall routes, reranking and budget serialization",
+    "final_tokens": 146,
+    "selected_units": 1,
+    "budget": 600,
+    "quality_evaluation": false,
+    "test_data_cleaned": true
+  }
+}

@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 
 def mount_frontend(app: FastAPI) -> None:
-    dist = Path(__file__).resolve().parents[1] / "web" / "dist"
+    dist = Path(__file__).resolve().parents[1] / "frontend" / "dist"
     if (dist / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=dist / "assets"), name="frontend-assets")
 

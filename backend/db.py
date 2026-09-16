@@ -1,19 +1,36 @@
 from collections.abc import AsyncIterator
 
-from sqlalchemy import select
+from sqlalchemy import event, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
+from backend import (
+    agent_models,  # noqa: F401 -- register durable agent tables
+    chat_models,  # noqa: F401 -- register private chat tables
+)
 from backend.config import get_settings
 from backend.models import Base, PlatformRoleBinding, Tenant, TenantMembership, User
+from backend.retrieval_sources_models import RetrievalBase
+from backend import rag_v3_models  # noqa: F401
 
 engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+
+
+@event.listens_for(Session, "after_begin")
+def restore_request_scope(session, transaction, connection):
+    # SET LOCAL expires on commit. Restore only the authenticated request's
+    # scope before post-commit refreshes and subsequent statements.
+    if connection.dialect.name == "postgresql":
+        for name, value in session.info.get("rls_context", {}).items():
+            connection.execute(text("SELECT set_config(:name, :value, true)"), {"name": name, "value": value})
 
 
 async def init_db() -> None:
     if get_settings().auto_create_schema:
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+            await connection.run_sync(RetrievalBase.metadata.create_all)
 
 
 async def bootstrap_identity() -> None:

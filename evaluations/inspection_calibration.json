@@ -1,0 +1,25 @@
+{
+  "identity": {
+    "model": "BAAI/bge-reranker-base",
+    "revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+    "max_length": 256,
+    "max_windows": 32,
+    "index_identity": "real:chunks-bge-cpu-v2:969892d7dbdc76d161e3943a"
+  },
+  "threshold": 0.003445578273385763,
+  "passed": false,
+  "metrics": {
+    "gold": 18,
+    "recalled": 17,
+    "facts": 25,
+    "old_facts": 20,
+    "new_facts": 20,
+    "leaks": 0,
+    "over_budget": 0,
+    "false_positive_cases": 1
+  },
+  "validation_recall": 0.9444444444444444,
+  "median_token_reduction": -0.5407131782945737,
+  "dataset_sha256": "c5388e271bc328e28bca5d420f11eb4fe428935be7101f41838efcfbf8dce8a0",
+  "annotation_review": "agent-authored exact source spans; independent human review pending"
+}

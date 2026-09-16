@@ -177,6 +177,7 @@ async def me(user: Principal = Depends(current_principal), session: AsyncSession
             "tenant_name": user.tenant_name,
             "workspace_kind": user.workspace_kind,
             "email_verified": bool(account and account.email_verified_at),
+            "company_creation_requires_verified_email": get_settings().require_verified_email_for_company,
             "account_type": user.account_type,
             "session_context": user.session_context,
             "role": user.role.value,

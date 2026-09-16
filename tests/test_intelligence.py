@@ -14,13 +14,17 @@ from backend.models import KnowledgeDocument, Tenant
 
 async def test_structured_retries_invalid_model_output(monkeypatch):
     settings = get_settings()
+    monkeypatch.setattr(settings, "model_api_style", "responses")
     monkeypatch.setattr(settings, "model_base_url", "https://model.example.test/v1")
     monkeypatch.setattr(settings, "model_name", "test-model")
     monkeypatch.setattr(settings, "model_api_key", "test-only")
     attempts = []
     def handler(request):
         attempts.append(request)
-        assert json.loads(request.content)["store"] is False
+        payload = json.loads(request.content)
+        assert payload["store"] is False
+        assert "Tool Result" in payload["instructions"]
+        assert "Memory" in payload["instructions"]
         return httpx.Response(200, json={"status": "completed", "output": [{"content": [{"type": "output_text", "text": "{}"}]}]})
     with pytest.raises(HTTPException) as error:
         await structured("test", {}, ExtractedRequirements, transport=httpx.MockTransport(handler))

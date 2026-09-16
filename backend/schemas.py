@@ -7,6 +7,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from backend.agent_types import AgentState
+
 
 class Role(StrEnum):
     PLATFORM_ADMIN = "platform_admin"
@@ -39,6 +41,7 @@ class ProjectRole(StrEnum):
 
 
 class RunStatus(StrEnum):
+    BLOCKED = "blocked"
     PREPARING_MATERIALS = "preparing_materials"
     PENDING = "pending"
     RUNNING = "running"
@@ -151,6 +154,8 @@ class ImplementationGraphState(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
     project_id: UUID
     run_id: UUID
+    engine_version: str = "legacy"
+    agent: AgentState = Field(default_factory=AgentState)
     current_node: str = "create_project"
     status: RunStatus = RunStatus.RUNNING
     requirements: list[RequirementSpec] = Field(default_factory=list)
@@ -225,6 +230,11 @@ class RunView(BaseModel):
     current_node: str
     state: dict[str, Any]
     trace_id: str
+
+
+class ResumeRequest(BaseModel):
+    expected_version: int = Field(ge=1)
+    reason: str = Field(min_length=3, max_length=500)
 
 
 class Envelope(BaseModel):

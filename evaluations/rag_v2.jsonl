@@ -1,0 +1,54 @@
+{"id":"rbac-1","query":"角色权限有哪些","expected_titles":["角色与权限"],"review_status":"pending_human"}
+{"id":"rbac-2","query":"可以自定义权限组吗","expected_titles":["角色与权限"],"review_status":"pending_human"}
+{"id":"rbac-3","query":"管理员与访客角色","expected_titles":["角色与权限"],"review_status":"pending_human"}
+{"id":"rbac-4","query":"给不同成员设置不同访问权限","expected_titles":["角色与权限"],"review_status":"pending_human"}
+{"id":"sso-1","query":"企业版 OIDC 单点登录","expected_titles":["企业身份认证"],"review_status":"pending_human"}
+{"id":"sso-2","query":"是否支持 SAML 即时配置","expected_titles":["企业身份认证"],"review_status":"pending_human"}
+{"id":"sso-3","query":"企业身份认证的限制","expected_titles":["企业身份认证"],"review_status":"pending_human"}
+{"id":"sso-4","query":"员工用统一身份登录系统","expected_titles":["企业身份认证"],"review_status":"pending_human"}
+{"id":"workflow-1","query":"任务状态流包括哪些状态","expected_titles":["任务状态流"],"review_status":"pending_human"}
+{"id":"workflow-2","query":"项目模板可以定义审核中吗","expected_titles":["任务状态流"],"review_status":"pending_human"}
+{"id":"workflow-3","query":"待办进行中审核中完成","expected_titles":["任务状态流"],"review_status":"pending_human"}
+{"id":"workflow-4","query":"团队希望调整任务流转步骤","expected_titles":["任务状态流"],"review_status":"pending_human"}
+{"id":"fields-1","query":"自定义字段支持哪些类型","expected_titles":["自定义字段"],"review_status":"pending_human"}
+{"id":"fields-2","query":"任务可以添加日期字段吗","expected_titles":["自定义字段"],"review_status":"pending_human"}
+{"id":"fields-3","query":"文本数字单选成员字段","expected_titles":["自定义字段"],"review_status":"pending_human"}
+{"id":"fields-4","query":"给任务增加一个截止日期属性","expected_titles":["自定义字段"],"review_status":"pending_human"}
+{"id":"notify-1","query":"通知规则支持哪些事件","expected_titles":["通知规则"],"review_status":"pending_human"}
+{"id":"notify-2","query":"任务到期有站内通知吗","expected_titles":["通知规则"],"review_status":"pending_human"}
+{"id":"notify-3","query":"分配任务和状态变化通知","expected_titles":["通知规则"],"review_status":"pending_human"}
+{"id":"notify-4","query":"希望快到期时提醒负责人","expected_titles":["通知规则"],"review_status":"pending_human"}
+{"id":"members-1","query":"成员 CSV 必填列","expected_titles":["成员 CSV 导入"],"review_status":"pending_human"}
+{"id":"members-2","query":"导入 name email department role","expected_titles":["成员 CSV 导入"],"review_status":"pending_human"}
+{"id":"members-3","query":"导入成员邮箱必须唯一吗","expected_titles":["成员 CSV 导入"],"review_status":"pending_human"}
+{"id":"members-4","query":"批量建立员工账号的表格格式","expected_titles":["成员 CSV 导入"],"review_status":"pending_human"}
+{"id":"projects-1","query":"项目 CSV 导入字段","expected_titles":["项目 CSV 导入"],"review_status":"pending_human"}
+{"id":"projects-2","query":"owner_email template name","expected_titles":["项目 CSV 导入"],"review_status":"pending_human"}
+{"id":"projects-3","query":"批量导入项目需要负责人邮箱吗","expected_titles":["项目 CSV 导入"],"review_status":"pending_human"}
+{"id":"projects-4","query":"项目表格怎样指定模板","expected_titles":["项目 CSV 导入"],"review_status":"pending_human"}
+{"id":"discovery-1","query":"需求调研 SOP","expected_titles":["需求调研 SOP"],"review_status":"pending_human"}
+{"id":"discovery-2","query":"实施前需要确认人数和部门吗","expected_titles":["需求调研 SOP"],"review_status":"pending_human"}
+{"id":"discovery-3","query":"调研时确认审批人和目标上线日期","expected_titles":["需求调研 SOP"],"review_status":"pending_human"}
+{"id":"discovery-4","query":"首次客户访谈要收集哪些组织信息","expected_titles":["需求调研 SOP"],"review_status":"pending_human"}
+{"id":"config-1","query":"配置变更 SOP","expected_titles":["配置变更 SOP"],"review_status":"pending_human"}
+{"id":"config-2","query":"权限配置必须审批吗","expected_titles":["配置变更 SOP"],"review_status":"pending_human"}
+{"id":"config-3","query":"配置预览审批快照验证","expected_titles":["配置变更 SOP"],"review_status":"pending_human"}
+{"id":"config-4","query":"改工作流之前如何检查并保留备份","expected_titles":["配置变更 SOP"],"review_status":"pending_human"}
+{"id":"golive-1","query":"上线检查 SOP","expected_titles":["上线检查 SOP"],"review_status":"pending_human"}
+{"id":"golive-2","query":"上线前检查培训和导入结果","expected_titles":["上线检查 SOP"],"review_status":"pending_human"}
+{"id":"golive-3","query":"未关闭阻塞项可以上线吗","expected_titles":["上线检查 SOP"],"review_status":"pending_human"}
+{"id":"golive-4","query":"正式启用前应该核对哪些条件","expected_titles":["上线检查 SOP"],"review_status":"pending_human"}
+{"id":"case-1","query":"80 人设计公司实施案例","expected_titles":["设计公司实施案例"],"review_status":"pending_human"}
+{"id":"case-2","query":"设计公司分三个阶段上线","expected_titles":["设计公司实施案例"],"review_status":"pending_human"}
+{"id":"case-3","query":"调研规划配置迁移培训上线案例","expected_titles":["设计公司实施案例"],"review_status":"pending_human"}
+{"id":"case-4","query":"八十名员工的设计团队怎么安排实施","expected_titles":["设计公司实施案例"],"review_status":"pending_human"}
+{"id":"duplicate-1","query":"重复邮箱错误如何修复","expected_titles":["重复邮箱错误"],"review_status":"pending_human"}
+{"id":"duplicate-2","query":"重复邮箱行会导入吗","expected_titles":["重复邮箱错误"],"review_status":"pending_human"}
+{"id":"duplicate-3","query":"修改重复记录后重新校验","expected_titles":["重复邮箱错误"],"review_status":"pending_human"}
+{"id":"duplicate-4","query":"两行填了相同电子邮件怎么办","expected_titles":["重复邮箱错误"],"review_status":"pending_human"}
+{"id":"absent-1","query":"火星探测轨道计算","expected_titles":[],"review_status":"pending_human"}
+{"id":"absent-2","query":"明天东京天气","expected_titles":[],"review_status":"pending_human"}
+{"id":"absent-3","query":"外汇实时汇率","expected_titles":[],"review_status":"pending_human"}
+{"id":"absent-4","query":"烤面包食谱","expected_titles":[],"review_status":"pending_human"}
+{"id":"absent-5","query":"量子纠缠实验","expected_titles":[],"review_status":"pending_human"}
+{"id":"absent-6","query":"ERR_QUANTUM_9876","expected_titles":[],"review_status":"pending_human"}
