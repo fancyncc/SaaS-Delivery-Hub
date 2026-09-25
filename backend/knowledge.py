@@ -56,7 +56,7 @@ def index_identity() -> str:
     if s.rag_mode == "real":
         model = s.embedding_local_model if s.embedding_mode == "local" else s.embedding_model
         signature = hashlib.sha256(json.dumps([model, s.embedding_mode, s.embedding_revision,
-            s.embedding_dimensions, s.embedding_base_url, s.embedding_query_instruction,
+            s.embedding_dimensions, s.embedding_query_instruction,
             "l2-normalized", s.embedding_query_style, s.embedding_max_length,
             s.knowledge_chunk_tokens, s.knowledge_chunk_overlap, "structure-v3-tokenizer",
             s.knowledge_index_version]).encode()).hexdigest()[:24]
@@ -129,8 +129,8 @@ async def rerank(query: str, hits: list[dict]) -> list[dict]:
 
 async def retrieve(session, tenant_id: str, query: str, limit: int = 5, *, project_ids: list[str] | None = None, knowledge_only: bool = False) -> list[dict]:
     if get_settings().rag_mode == "real":
-        from backend.retrieval_sources import retrieve as retrieve_sources
-        return await retrieve_sources(session, tenant_id, query, limit, project_ids=project_ids or [], knowledge_only=knowledge_only)
+        from backend.rag_v3_adapter import retrieve_knowledge
+        return await retrieve_knowledge(session, tenant_id, query, project_ids=project_ids or [], limit=limit)
     if not query.strip():
         return []
     limit = min(max(limit, 1), 5)

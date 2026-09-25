@@ -89,7 +89,7 @@ async def test_readiness_requires_successful_real_warmup(monkeypatch):
         await release.wait()
         return [[1.0] + [0.0] * 511]
 
-    async def reranking(query, hits):
+    async def reranking(query, hits, **kwargs):
         return hits
 
     monkeypatch.setattr(server, "embeddings", embedding)
@@ -97,15 +97,14 @@ async def test_readiness_requires_successful_real_warmup(monkeypatch):
     monkeypatch.setattr(server.get_settings(), "embedding_mode", "local")
     monkeypatch.setattr(server.get_settings(), "reranker_mode", "local")
     async with server.app.router.lifespan_context(server.app):
-        await entered.wait()
+        await asyncio.wait_for(entered.wait(), timeout=5)
         with pytest.raises(HTTPException):
             await server.ready()
         release.set()
         # Let both queued operations finish before inspecting readiness.
-        for _ in range(20):
-            await asyncio.sleep(0)
-            if server.app.state.ready:
-                break
+        async with asyncio.timeout(5):
+            while not server.app.state.ready:
+                await asyncio.sleep(0.01)
         assert (await server.ready())["real_models_verified"] is True
 
 

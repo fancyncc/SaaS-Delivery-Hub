@@ -1,6 +1,5 @@
 """Stage-scoped agent loop. Models propose; registry and business code authorize."""
 import asyncio
-import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 from uuid import NAMESPACE_URL, uuid5
@@ -122,13 +121,27 @@ async def context_for(session, run, state, tool):
         "knowledge": agent.knowledge, "experiences": [m.model_dump() for m in agent.memories],
         "observations": [o.model_dump() for o in agent.observations[-5:]],
         "evaluation": agent.evaluation.model_dump() if agent.evaluation else None}
-    # Bound by UTF-8 bytes, conservative for all supported model tokenizers.
-    budget = get_settings().agent_context_tokens
-    for key in ("observations", "experiences", "knowledge"):
-        while len(json.dumps(context, ensure_ascii=False).encode()) > budget and context[key]:
-            context[key].pop(0 if key == "observations" else -1)
-    if len(json.dumps(context, ensure_ascii=False).encode()) > budget:
-        raise BudgetExceeded("原始需求与硬约束超过上下文预算，需人工调整预算")
+    from backend.context_budget import ContextBlock, ContextBundle, input_limit
+    fixed = {k: v for k, v in context.items() if k not in {"knowledge", "experiences", "observations"}}
+    bundle = ContextBundle([ContextBlock("required", fixed, "run", "required", True)])
+    for category in ("knowledge", "observations", "experiences"):
+        values = list(reversed(context[category])) if category == "observations" else context[category]
+        bundle.blocks.extend(ContextBlock(category, value, "run", "evidence" if category == "knowledge" else "advisory") for value in values)
+    from backend.knowledge import lexemes
+    terms = set(lexemes(project.requirements_text).split())
+    for index, block in enumerate(bundle.blocks):
+        block.relevance = len(terms & set(lexemes(str(block.value)).split())) / max(1, len(terms))
+        block.task_value = {"knowledge": 1, "observations": 0.8, "experiences": 0.5}.get(block.category, 1)
+        block.recency = 1 - index / max(1, len(bundle.blocks))
+    # Reserve space for task-specific input, instructions and schema; final request
+    # gets an independent full-envelope preflight in the model adapter.
+    try:
+        bundle.select(max(0, input_limit(agent=True) - 2048))
+    except HTTPException as exc:
+        raise BudgetExceeded("原始需求与硬约束超过上下文 token 预算，需人工调整预算") from exc
+    for category in ("knowledge", "observations", "experiences"):
+        context[category] = [b.value for b in bundle.blocks if b.selected and b.category == category]
+    context["observations"].reverse()
     return context
 
 
@@ -250,6 +263,8 @@ async def advance_round(session, run):
     state.current_node = next_tool
     if agent.stage != stage:
         agent = AgentState(stage=stage, tokens_reserved=agent.tokens_reserved,
+            tokens_estimated=agent.tokens_estimated, tokens_actual=agent.tokens_actual,
+            tokens_unsettled=agent.tokens_unsettled,
             observations=agent.observations[-5:], resume_count=agent.resume_count)
         state.agent = agent
     if agent.rounds >= get_settings().agent_max_rounds:

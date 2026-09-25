@@ -28,6 +28,16 @@ def test_query_types_do_not_gate_retrieval(question, expected):
     assert pipeline.needs_retrieval(question)
 
 
+def test_attribute_questions_expand_field_intent_without_changing_original():
+    from backend.rag_v3_policy import retrieval_question
+    question = '售后工单的属性有哪些'
+    policy = query_policy(question)
+    assert policy.queries[0] == question
+    assert retrieval_question(question) in policy.queries
+    assert '字段' in retrieval_question(question)
+    assert retrieval_question('首次响应时限是多少') == '首次响应时限是多少'
+
+
 async def test_enumeration_exceeds_eight_without_raising_token_budget(monkeypatch):
     monkeypatch.setattr(pipeline, 'token_counts', tokens)
     rows = [evidence(i, f'条件 {i} 必须满足') for i in range(12)]

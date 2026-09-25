@@ -39,6 +39,12 @@ export type AgentRun = {
   allowed_actions: string[]; blocking_reason?: string
 }
 
+export type WorkbenchTask = {
+  run_id: string; project_id: string; project_name: string
+  run_number: number; current_node: string; status: string
+  reason?: string; actions: string[]
+}
+
 export type AgentStep = {
   id: string; sequence: number; node: string; status: string; detail: Record<string, any>; created_at: string
 }

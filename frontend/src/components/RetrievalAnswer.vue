@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-const props = defineProps<{ answer: string; citations: { id: string; title: string; source: string; text: string; number?: number }[] }>()
+const props = defineProps<{ answer: string; citations: { id: string; title: string; source: string; text: string; number?: number; document_id?: string; location?: {page?: number; slide?: number; sheet?: string; row?: number} }[] }>()
 const selected = ref<number | null>(null)
 const root = ref<HTMLElement | null>(null)
 const copied = ref('')
@@ -47,8 +47,8 @@ async function copy() {
     <aside v-if="sources.length" class="result-sources" aria-label="检索来源">
       <header><h3>检索来源 <span>{{ sources.length }}</span></h3><small>点击卡片展开片段</small></header>
       <details v-for="source in sources" :key="`${source.id}-${source.number}`" class="source-card" :class="{ selected: selected === source.number }" :data-source-number="source.number" :open="selected === source.number" tabindex="-1">
-        <summary><span class="source-number">{{ source.number }}</span><span class="source-title"><strong>{{ source.title }}</strong><small>{{ source.source }}</small><span class="source-preview">{{ source.text }}</span></span><span class="expand-icon">⌄</span></summary>
-        <div class="source-full"><small>来源片段 · {{ source.number }}</small><p>{{ source.text || '此来源未提供原文片段。' }}</p></div>
+        <summary><span class="source-number">{{ source.number }}</span><span class="source-title"><strong>{{ source.title }}</strong><small>{{ source.source }}<template v-if="source.location?.page"> · 第 {{source.location.page}} 页</template><template v-else-if="source.location?.slide"> · 第 {{source.location.slide}} 张</template><template v-else-if="source.location?.sheet"> · {{source.location.sheet}}<template v-if="source.location?.row"> 第 {{source.location.row}} 行</template></template></small><span class="source-preview">{{ source.text }}</span></span><span class="expand-icon">⌄</span></summary>
+        <div class="source-full"><small>来源片段 · {{ source.number }}</small><p>{{ source.text || '此来源未提供原文片段。' }}</p><router-link v-if="source.document_id && source.location?.page" :to="`/app/knowledge/${source.document_id}#page-${source.location.page}`">查看文档第 {{source.location.page}} 页 →</router-link></div>
       </details>
     </aside>
   </div>

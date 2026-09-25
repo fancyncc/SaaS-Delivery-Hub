@@ -1,20 +1,33 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { api } from '../api'
+import { api, writeHeaders } from '../api'
 import { fragmentText } from '../fragmentText'
 const route = useRoute(), document = ref<any>(null), error = ref(''), busy = ref(false)
+const phaseLabels: Record<string,string> = {pending:'等待解析',parsing:'解析中',indexing:'索引中',ready:'索引就绪',failed:'解析或索引失败'}
 let revision = 0
 const sections = computed(() => (document.value?.body || '').split(/\n(?=#{1,6}\s)/).map((part: string, i: number) => {
   const lines = part.split('\n'), heading = lines[0].match(/^#{1,6}\s+(.+)/)
-  return {id:`section-${i}`, title:heading ? fragmentText(heading[1]) : '正文', body:fragmentText(heading ? lines.slice(1).join('\n') : part)}
+  const page = heading?.[1].match(/^第 (\d+) 页$/)
+  return {id:page ? `page-${page[1]}` : `section-${i}`, title:heading ? fragmentText(heading[1]) : '正文', body:fragmentText(heading ? lines.slice(1).join('\n') : part)}
 }).filter((s: any) => s.body))
+watch([document, () => route.hash], async ([loaded]) => {
+  if (!loaded || !route.hash) return
+  await nextTick()
+  window.document.getElementById(route.hash.slice(1))?.scrollIntoView()
+}, {flush:'post'})
 async function load() {
   const current = ++revision
   busy.value = true; error.value = ''; document.value = null
   try { const data = await api(`/api/knowledge/${route.params.id}`); if (current === revision) document.value = data }
   catch (e: any) { if (current === revision) error.value = e.message }
   finally { if (current === revision) busy.value = false }
+}
+async function retryIndex() {
+  try {
+    await api(`/api/knowledge/${route.params.id}/v3-index`, {method:'POST', headers:writeHeaders()})
+    await load()
+  } catch (e: any) { error.value = e.message }
 }
 function download() {
   const d = document.value
@@ -33,7 +46,8 @@ watch(() => route.params.id, load, { immediate: true })
     <div v-if="document" class="reader-layout"><aside class="reader-sidebar"><span class="eyebrow">DOCUMENT INFO</span><h2>文档信息</h2>
       <p>版本 {{ document.version }} · {{ document.project_id ? '项目私有文档' : '公司通用文档' }} · {{ document.active ? '启用中' : '已停用，不用于新检索' }}</p>
       <p>来源：{{ document.source }} · 模块：{{ document.module }}</p><p>授权说明：{{ document.license }}</p>
-      <section v-if="document.v3"><h3>V3 解析与索引</h3><p>{{document.v3.phase}} · {{document.v3.filename}}</p><p v-if="document.v3.error" role="alert">{{document.v3.error}}</p><p v-for="warning in document.v3.warnings" :key="warning" role="status">{{warning}}</p><button class="secondary" @click="load">刷新解析状态</button></section>
+      <section v-if="document.v3"><h3>解析与索引</h3><p>{{phaseLabels[document.v3.phase] || '等待索引'}} · {{document.v3.filename}}</p><p v-if="document.v3.error" role="alert">{{document.v3.error}}</p><p v-for="warning in document.v3.warnings" :key="warning" role="status">{{warning}}</p><button v-if="document.can_reindex" class="secondary" @click="retryIndex">重新解析与索引</button> <button class="secondary" @click="load">刷新解析状态</button></section>
+      <p v-else-if="document.index_error" role="alert">{{document.index_error}}</p>
       <button class="secondary" @click="download">下载提取文本（Markdown）</button>
       <nav class="reader-toc"><h3>内容目录</h3><a v-for="s in sections" :key="s.id" :href="`#${s.id}`">{{s.title}}</a></nav></aside><article class="panel reader-paper">
       <span class="eyebrow">DOCUMENT CONTENT</span><section v-for="s in sections" :id="s.id" :key="s.id" class="reader-section"><h2>{{s.title}}</h2><p class="document-body">{{s.body}}</p></section>

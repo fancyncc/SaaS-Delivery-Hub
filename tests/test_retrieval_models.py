@@ -234,3 +234,15 @@ def test_index_fingerprint_covers_chunking_and_query_format(monkeypatch):
         identity = index_identity()
         assert identity not in identities
         identities.add(identity)
+
+
+def test_real_index_identity_ignores_service_address_but_tracks_model(monkeypatch):
+    s = get_settings()
+    monkeypatch.setattr(s, 'rag_mode', 'real')
+    monkeypatch.setattr(s, 'embedding_mode', 'online')
+    monkeypatch.setattr(s, 'embedding_base_url', 'http://127.0.0.1:8010/v1')
+    identity = index_identity()
+    monkeypatch.setattr(s, 'embedding_base_url', 'http://retrieval:8010/v1')
+    assert index_identity() == identity
+    monkeypatch.setattr(s, 'embedding_revision', 'different-weights')
+    assert index_identity() != identity

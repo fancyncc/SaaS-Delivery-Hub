@@ -3,7 +3,8 @@
   "quality_evaluation_completed": false,
   "independent_review_completed": false,
   "model_comparison_completed": false,
-  "synthetic_boundary_questions": 120,
+  "synthetic_boundary_questions": 192,
+  "formats": ["md", "txt", "docx", "csv", "json", "pdf", "pptx", "xlsx"],
   "failures": [
     "Independent review and additional diverse source annotations are pending",
     "Two pinned model combinations have not completed paired evaluation",

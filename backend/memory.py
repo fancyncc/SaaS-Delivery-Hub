@@ -24,6 +24,8 @@ async def reflect(session, run, action: AgentAction):
 
 
 async def verify_recovery(session, run, action: AgentAction):
+    from backend.agent_lessons import record
+    await record(session, run, action)
     if action.status != "succeeded":
         return
     rows = (await session.scalars(select(Experience).where(Experience.tenant_id == run.tenant_id,
@@ -40,5 +42,6 @@ async def recall(session, run, tool: str) -> list[MemoryEntry]:
     rows = (await session.scalars(select(Experience).where(Experience.tenant_id == run.tenant_id,
         Experience.project_id == run.project_id, Experience.tool == tool,
         Experience.verified.is_(True), Experience.active.is_(True)).order_by(Experience.created_at.desc()).limit(3))).all()
+    from backend.agent_lessons import recall as recall_lessons
     return [MemoryEntry(id=r.id, advice=r.advice, source_run_id=r.run_id,
-        source_action_id=r.source_action_id, verified=True) for r in rows]
+        source_action_id=r.source_action_id, verified=True) for r in rows] + await recall_lessons(session, run, tool)

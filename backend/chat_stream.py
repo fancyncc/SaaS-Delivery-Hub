@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 from fastapi import HTTPException
 
-from backend.chat import answer_instructions, answer_question, conversation_context
+from backend.chat import answer_instructions, answer_question
 from backend.chat_planning import plan_query
 from backend.config import get_settings
 from backend.llm_stream import stream_text
@@ -23,7 +23,9 @@ async def generate(session, row, user, payload, api_schema, memo):
     steps = []
     try:
         yield event("step", {"stage": "plan", "summary": "正在判断问题是否需要补充上下文"})
-        plan = await plan_query(question, row.messages)
+        from backend.chat_context import context_status
+        state = (await context_status(session, row))["state"] if get_settings().chat_context_mode == "on" else None
+        plan = await plan_query(question, row.messages, state=state)
         steps.append({"stage": "plan", "action": plan.action, "query": plan.query})
         yield event("step", steps[-1])
         if plan.action == "clarify":
@@ -44,15 +46,17 @@ async def generate(session, row, user, payload, api_schema, memo):
             steps.append({"stage": "observe", "source_count": len(sources),
                 "retrieval": "hybrid" if get_settings().rag_mode == "real" else "keyword"})
             yield event("step", steps[-1])
+            from backend.chat_context import build_context
+            context, memo, sources = await build_context(session, row, question, memo, sources)
             if get_settings().model_mode != "real" or (sources and sources[0].get("kind") == "scope"):
-                result = await answer_question(question, row.messages, memo, sources)
+                result = await answer_question(question, row.messages, memo, sources, context=context)
                 yield event("delta", {"text": result["answer"]})
             else:
                 yield event("step", {"stage": "answer", "summary": "正在根据本轮来源生成回答"})
                 answer = ""
                 async for delta in stream_text(answer_instructions() +
                         " 本次直接流式输出正文，不输出 JSON 或 citation_ids 字段。引用使用 evidence 顺序编号 [1]。",
-                        {"question": question, "context": conversation_context(row.messages, question, sources),
+                        {"question": question, "context": context,
                          "memory": memo, "evidence": sources}):
                     answer += delta
                     yield event("delta", {"text": delta})

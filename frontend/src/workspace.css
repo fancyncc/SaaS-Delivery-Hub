@@ -9,6 +9,8 @@
 .workspace-workbench>.panel:first-of-type{border-left:4px solid #55977c;background:linear-gradient(110deg,#f7fbf7,#fff)}
 .workspace-workbench>.panel:first-of-type>p{margin-bottom:0;padding:16px 20px;background:#edf5ef;border-radius:10px}
 .workspace-workbench article{padding:18px 0;border-top:1px solid var(--line);font-size:14px}
+.workspace-workbench article>a{display:block;font-size:15px;font-weight:600}
+.workspace-workbench article>small{display:block;margin-top:6px;color:var(--muted)}
 .workspace-workbench article p{font-size:13px;color:var(--muted);margin-bottom:0}
 .workspace-workbench form{padding:24px;background:#f7f9f5;border:1px solid #e1e8df;border-radius:12px;margin:22px 0 28px;gap:20px}
 .workspace-workbench label{display:grid;gap:8px;font-size:13px;font-weight:600;color:var(--ink)}

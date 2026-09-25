@@ -1,6 +1,7 @@
-"""Independent derived index; never consulted by chat or Agent retrieval."""
-from sqlalchemy import ForeignKey, Integer, JSON, LargeBinary, String, Text, UniqueConstraint
+"""Derived V3 knowledge index shared by inspection, chat, and Agent retrieval."""
+from sqlalchemy import JSON, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
+
 from backend.models import Base, uid
 from backend.vector_type import V3Vector
 

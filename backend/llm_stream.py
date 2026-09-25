@@ -5,6 +5,7 @@ import httpx
 from fastapi import HTTPException
 
 from backend.config import get_settings
+from backend.context_budget import preflight
 from backend.prompt_boundary import DATA_BOUNDARY
 
 
@@ -20,12 +21,15 @@ async def stream_text(instructions, source, *, transport=None):
     content = json.dumps(source, ensure_ascii=False)
     if s.model_api_style == "chat_completions":
         endpoint = "/chat/completions"
-        payload = {"model": model, "stream": True, "max_tokens": 4096,
+        payload = {"model": model, "stream": True, "max_tokens": s.model_max_output_tokens,
             "messages": [{"role": "system", "content": instructions}, {"role": "user", "content": content}]}
     else:
         endpoint = "/responses"
-        payload = {"model": model, "stream": True, "store": False, "max_output_tokens": 4096,
+        payload = {"model": model, "stream": True, "store": False, "max_output_tokens": s.model_max_output_tokens,
             "instructions": instructions, "input": content}
+    if s.model_api_style == "chat_completions":
+        payload["stream_options"] = {"include_usage": True}
+    reservation = preflight(payload)
     complete, count = False, 0
     async with httpx.AsyncClient(timeout=s.model_timeout, transport=transport) as client:
         async with client.stream("POST", base.rstrip("/") + endpoint,
@@ -40,6 +44,7 @@ async def stream_text(instructions, source, *, transport=None):
                 if raw == "[DONE]":
                     break
                 data = json.loads(raw)
+                reservation.settle(data.get("usage") or data.get("response", {}).get("usage"))
                 if "error" in data:
                     raise HTTPException(502, "模型流返回错误")
                 delta = ""

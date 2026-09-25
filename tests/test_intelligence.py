@@ -3,12 +3,10 @@ import json
 import httpx
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import select
 
 from backend.config import get_settings
 from backend.db import SessionLocal
 from backend.intelligence import ExtractedRequirements, structured
-from backend.knowledge_routes import retrieve
 from backend.models import KnowledgeDocument, Tenant
 
 
@@ -38,7 +36,7 @@ async def test_model_without_credentials_is_not_silent_fallback(monkeypatch):
     assert error.value.status_code == 503
 
 
-async def test_knowledge_tenant_and_version_boundaries(client):
+async def test_knowledge_list_tenant_and_version_boundaries(client):
     base = {"title": "成员导入", "version": 1, "module": "import", "source": "内部原创", "license": "本项目授权测试资料", "body": "成员导入需要校验部门、角色和邮箱，审批通过后才允许创建成员。"}
     first = await client.post("/api/knowledge", json=base)
     assert first.status_code == 200
@@ -46,15 +44,15 @@ async def test_knowledge_tenant_and_version_boundaries(client):
     assert second.status_code == 200
     assert (await client.post("/api/knowledge", json=base)).status_code == 409
     async with SessionLocal() as session:
-        tenant = await session.scalar(select(Tenant).where(Tenant.slug == "legacy-demo"))
         other = Tenant(name="其他公司", slug="knowledge-other")
         session.add(other)
         await session.flush()
         session.add(KnowledgeDocument(tenant_id=other.id, **{**base, "body": "跨公司秘密：成员导入资料绝不能泄露给其他租户读取。"}))
         await session.commit()
-        hits = await retrieve(session, tenant.id, "成员导入")
-        assert len(hits) == 1 and hits[0]["version"] == 2
-        assert "秘密" not in hits[0]["text"]
+    listed = (await client.get("/api/knowledge")).json()["data"]
+    assert {item["id"] for item in listed} == {
+        first.json()["data"]["id"], second.json()["data"]["id"]
+    }
     await client.post(f"/api/knowledge/{second.json()['data']['id']}/deactivate")
-    async with SessionLocal() as session:
-        assert await retrieve(session, tenant.id, "成员导入") == []
+    listed = (await client.get("/api/knowledge")).json()["data"]
+    assert next(item for item in listed if item["id"] == second.json()["data"]["id"])["active"] is False

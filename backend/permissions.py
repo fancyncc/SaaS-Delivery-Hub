@@ -81,6 +81,9 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
     "viewer": {"project.view", "run.view", "approval.view", "import.view", "acceptance.view", "artifact.view"},
 }
 
+for _role in ("company_admin", "project_manager", "implementation_consultant", "approver", "customer_contact"):
+    ROLE_PERMISSIONS[_role].update({"project.document.submit", "project.task.write"})
+
 PERMISSION_META: dict[str, tuple[str, str]] = {}
 for role_permissions in ROLE_PERMISSIONS.values():
     for code in role_permissions:

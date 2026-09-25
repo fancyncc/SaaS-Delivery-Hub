@@ -1,6 +1,11 @@
 services:
   api:
-    build: .
+    build: &backend_build
+      context: .
+      args:
+        PIP_INDEX_URL: ${DOCKER_PIP_INDEX_URL:-https://pypi.org/simple}
+        PIP_DEFAULT_TIMEOUT: ${DOCKER_PIP_TIMEOUT:-120}
+        PIP_RETRIES: ${DOCKER_PIP_RETRIES:-10}
     environment: &api_environment
       DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-saas_app}:${SAAS_APP_DB_PASSWORD:-saas_app}@postgres:5432/${POSTGRES_DB:-saas_agent}
       APP_DB_USER: ${APP_DB_USER:-saas_app}
@@ -19,9 +24,20 @@ services:
       AGENT_MAX_REPLANS: ${AGENT_MAX_REPLANS:-2}
       AGENT_TOKEN_BUDGET: ${AGENT_TOKEN_BUDGET:-120000}
       AGENT_CONTEXT_TOKENS: ${AGENT_CONTEXT_TOKENS:-12000}
+      CHAT_CONTEXT_MODE: ${CHAT_CONTEXT_MODE:-off}
+      CHAT_CONTEXT_TOKENS: ${CHAT_CONTEXT_TOKENS:-12000}
+      CHAT_HISTORY_ENABLED: ${CHAT_HISTORY_ENABLED:-false}
+      CHAT_MEMORY_ITEMS_ENABLED: ${CHAT_MEMORY_ITEMS_ENABLED:-false}
+      CHAT_MEMORY_CANDIDATES_ENABLED: ${CHAT_MEMORY_CANDIDATES_ENABLED:-false}
       MODEL_MODE: ${MODEL_MODE:-deterministic}
       RAG_MODE: ${RAG_MODE:-mock}
-      LOCAL_INDEXER_ENABLED: ${LOCAL_INDEXER_ENABLED:-false}
+      RAG_V3_INDEXING_ENABLED: ${RAG_V3_INDEXING_ENABLED:-true}
+      RAG_PDF_ENABLED: ${RAG_PDF_ENABLED:-true}
+      RAG_OFFICE_ENABLED: ${RAG_OFFICE_ENABLED:-true}
+      RAG_V3_RELEVANCE_MODE: ${RAG_V3_RELEVANCE_MODE:-rules}
+      RAG_V3_MIN_RERANK_SCORE: ${RAG_V3_MIN_RERANK_SCORE:-0.5}
+      RAG_V3_RELEASE: ${RAG_V3_RELEASE:-evaluations/v3/release.json}
+      LOCAL_INDEXER_ENABLED: "false"
       MODEL_API_STYLE: ${MODEL_API_STYLE:-responses}
       LLM_MODE: ${LLM_MODE:-online}
       LLM_LOCAL_MODEL: ${LLM_LOCAL_MODEL:-}
@@ -52,9 +68,9 @@ services:
     ports: ["8000:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
-    healthcheck: {test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"], interval: 10s, timeout: 3s, retries: 5}
+    healthcheck: {test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"], interval: 10s, timeout: 5s, retries: 5}
   migrate:
-    build: .
+    build: *backend_build
     environment:
       <<: *api_environment
       MIGRATION_DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-saas}:${SAAS_DB_PASSWORD:-saas}@postgres:5432/${POSTGRES_DB:-saas_agent}
@@ -63,7 +79,7 @@ services:
       postgres: {condition: service_healthy}
   worker:
     profiles: ["agent"]
-    build: .
+    build: *backend_build
     environment:
       <<: *api_environment
     command: ["celery", "-A", "backend.worker.celery", "worker", "-Q", "celery", "--loglevel=WARNING", "--concurrency=2"]
@@ -72,7 +88,7 @@ services:
       redis: {condition: service_started}
   indexer:
     profiles: ["agent"]
-    build: .
+    build: *backend_build
     environment:
       <<: *api_environment
     command: ["celery", "-A", "backend.worker.celery", "worker", "-Q", "indexing", "--loglevel=WARNING", "--concurrency=1"]
@@ -81,7 +97,7 @@ services:
       redis: {condition: service_started}
   beat:
     profiles: ["agent"]
-    build: .
+    build: *backend_build
     environment:
       <<: *api_environment
     command: ["celery", "-A", "backend.worker.celery", "beat", "--loglevel=WARNING", "--schedule=/tmp/celerybeat"]

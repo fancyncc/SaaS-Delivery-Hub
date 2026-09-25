@@ -113,8 +113,12 @@ onMounted(async () => {
 <template>
   <main class="home-page page-wrap">
     <section class="intro-row">
-      <div><span class="eyebrow">PROJECTS</span><h1>项目管理</h1><p>查看项目进展、维护实施资料，集中管理项目文档。</p><button v-if="auth.isCompanyAdmin" class="primary" @click="showCreate=!showCreate">{{showCreate ? '收起新建表单' : '+ 新建项目'}}</button></div>
+      <div><span class="eyebrow">PROJECTS</span><h1>项目管理</h1><p>查看项目进展、提交项目文档，并通过多个协作任务推进交付。</p><button v-if="auth.isCompanyAdmin" class="primary" @click="showCreate=!showCreate">{{showCreate ? '收起新建表单' : '+ 新建项目'}}</button></div>
       <div class="stats"><div><strong>{{counts.total}}</strong><span>全部项目</span></div><div><strong>{{counts.active}}</strong><span>进行中</span></div><div><strong>{{counts.rejected}}</strong><span>已驳回</span></div><div><strong>{{counts.completed}}</strong><span>已完成</span></div></div>
+    </section>
+    <section class="collaboration-guide" aria-label="项目协作功能说明">
+      <div><span class="guide-icon">文</span><p><strong>成员提交文档</strong><small>进入项目文档，上传需求、设计和交付资料</small></p></div>
+      <div><span class="guide-icon">任</span><p><strong>多个任务协同</strong><small>拆分任务、分配负责人、设置截止日期并更新进度</small></p></div>
     </section>
     <p v-if="error" class="alert alert-danger">{{error}}</p><p v-if="success" class="alert alert-success">{{success}}</p>
 

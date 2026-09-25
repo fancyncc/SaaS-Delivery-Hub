@@ -1,12 +1,18 @@
 # SaaS Implementation Agent
 
-聊天现支持按需问题重写/澄清、最多两轮原生工具调用、MCP 只读接口及 SSE 流式回答。真实模式下，附件、项目和企业资料统一采用 BM25 + BGE 向量召回、RRF 融合与重排。本地部署、API 协议和验收边界见 [聊天 Agent 说明](docs/CHAT_AGENT.md)。
+项目协作：项目成员可提交文档，在项目下创建多个任务、分配负责人并更新进度。使用方式及数据库升级见 [项目协作说明](docs/PROJECT_COLLABORATION.md)。
+
+知识文档可上传 PDF（含扫描页 OCR）、PPTX、XLSX 及原有格式，经 V3 后台索引后供 RAG 查验、聊天和 Agent 检索。格式范围、限制和失败处理见 [PDF 与 Office 知识文档](docs/RAG_BINARY_DOCUMENTS.md)。
+
+上下文改进已实现统一 token 预算、结构化会话状态、滚动摘要、私有历史混合召回及分作用域记忆。功能按 `CHAT_CONTEXT_MODE`、`CHAT_HISTORY_ENABLED`、`CHAT_MEMORY_ITEMS_ENABLED` 和 `CHAT_MEMORY_CANDIDATES_ENABLED` 分阶段启用；仓库 `.env.example` 默认关闭，本机 Docker 验收环境已依次通过 `shadow`、`on`、历史与记忆功能，当前开启这些功能。候选记忆的自动提取仍由用户自行选择开启，默认关闭。验收顺序见 [上下文与记忆说明](docs/CONTEXT_MEMORY.md)。
+
+聊天现支持按需问题重写/澄清、最多两轮原生工具调用、MCP 只读接口及 SSE 流式回答。真实模式下，企业与项目知识文档使用 V3 最终证据；对话附件、项目需求与交付物继续走各自授权检索路径。本地部署、API 协议和验收边界见 [聊天 Agent 说明](docs/CHAT_AGENT.md)。
 
 AI 助手：客户工作台新增多轮对话、私有文档上传、项目材料和企业知识检索、来源引用及可管理的长期记忆。真实模型复用已有模型配置，离线模式明确显示资料原文。使用方式、格式限制及迁移见 [AI 助手说明](docs/AI_CHAT.md)。
 
 长程 Agent 与 RAG：新增阶段内里程碑 DAG、工具动作记录、评估重试/重规划、同 Run 恢复、项目经验记忆，以及带版本过滤的分块混合检索。默认保留旧引擎，新 Run 可通过 `AGENT_ENGINE=v2` 启用；配置、迁移和验收边界见 [Agent 与 RAG 说明](docs/AGENT_RAG.md)。
 
-CPU 本地检索：BGE-small 中文 512 维向量＋BGE-base 重排，支持后台建库、候选与推理窗口预算。依赖安装、模型下载、旧索引迁移与验证见 [CPU 检索部署说明](docs/RAG_CPU.md)。
+CPU 本地检索：BGE-small 中文 512 维向量＋BGE-base 重排，支持后台建库、候选与推理窗口预算。依赖安装、模型下载、索引迁移与验证见 [CPU 检索部署说明](docs/RAG_CPU.md)。
 
 本地一键启动（Windows）：在项目根目录执行 ` .\start.ps1 `，然后打开 <http://127.0.0.1:8000>。脚本自动使用项目 `.venv`、按需构建前端、备份并迁移本地 SQLite 数据库；无需 npm，也无需单独运行前端。已有服务请先按 Ctrl+C 停止。接口文档仍在 <http://127.0.0.1:8000/docs>。此脚本用于已安装项目依赖的本机开发环境，服务器数据库使用下方部署流程。
 
@@ -279,7 +285,11 @@ docker compose up --build
 | Prometheus | <http://localhost:9090> |
 | Grafana | <http://localhost:3000> |
 
-API 容器启动顺序为：确保最小权限应用数据库角色存在 → 使用迁移账号执行 Alembic → 授予应用账号 DML 权限 → 启动 Uvicorn。
+Compose 的 `migrate` 服务先确保最小权限应用角色存在、执行 Alembic 并授予新增表 DML 权限；API 的 `/ready` 随后校验数据库连接和迁移 head。`/health` 仅作存活检查。
+
+本机已有数据的更新使用 `pwsh -File scripts/deploy_local.ps1`。脚本读取 Compose 实际数据库名，暂停写入，创建 PostgreSQL custom-format 备份并在临时库恢复验证，然后运行迁移，重建 API、Web、retrieval、worker、indexer 与单实例 beat，并检查 API 和模型就绪。备份或验证失败时重新启动已暂停的服务；迁移失败时先从已验证备份恢复再启动服务。迁移成功后的服务故障不会自动回滚数据库，脚本会尝试启动现有容器并报告错误。可用 `pwsh -File scripts/verify_deploy_failure_recovery.ps1` 无 Docker 模拟前两类失败。不要在迁移落后时单独用 `docker compose up --no-deps api` 更新 API。备份保存在本机 `backups/`，不会提交到仓库。
+
+真实 RAG 需要同时运行 `rag` 和 `agent` profile；`worker` 处理默认队列，`indexer` 处理索引队列，单实例 `beat` 还调度邮件、outbox 和聊天上下文任务。Compose 固定关闭 API 内置索引循环。Prometheus `/metrics` 提供 V3 各阶段文档数和最旧待处理时间。
 
 > `docker-compose.yml` 面向开发与功能验证。公开部署前必须启用 HTTPS、安全 Cookie、独立密钥管理、受限网络、正式邮件服务、持久化备份和生产级可观测性，且不能继续使用示例密码。
 
@@ -382,3 +392,9 @@ npm run build
 ## 参与贡献
 
 欢迎通过 Issue 描述问题、复现步骤和预期行为，通过 Pull Request 提交改进。提交前请确保后端测试、Ruff、前端类型检查和生产构建均通过，并避免在测试数据、日志、截图或提交历史中包含真实客户信息、密钥或内部文档。
+
+### Docker pip download timeouts
+
+For `files.pythonhosted.org Read timed out`, retry `docker compose up --build`. Backend builds use a 120-second timeout, 10 connection retries, and a persistent BuildKit pip cache. Interrupted downloads can still fail; subsequent builds reuse cached packages.
+
+If PyPI remains unreachable, set `DOCKER_PIP_INDEX_URL` in `.env` to a reachable, trusted package index URL (including `/simple`). Optionally adjust `DOCKER_PIP_TIMEOUT` and `DOCKER_PIP_RETRIES`, then rebuild. These Compose options apply to api, migrate, worker, indexer and beat in the default configuration.

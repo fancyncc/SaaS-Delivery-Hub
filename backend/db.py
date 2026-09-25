@@ -7,11 +7,11 @@ from sqlalchemy.orm import Session
 from backend import (
     agent_models,  # noqa: F401 -- register durable agent tables
     chat_models,  # noqa: F401 -- register private chat tables
+    rag_v3_models,  # noqa: F401
 )
 from backend.config import get_settings
 from backend.models import Base, PlatformRoleBinding, Tenant, TenantMembership, User
 from backend.retrieval_sources_models import RetrievalBase
-from backend import rag_v3_models  # noqa: F401
 
 engine = create_async_engine(get_settings().database_url, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)

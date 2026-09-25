@@ -3,6 +3,7 @@ import re
 
 from pydantic import BaseModel, Field
 
+
 class RetrievalDecision(BaseModel):
     needs_rag: bool
     reason: str = Field(min_length=1, max_length=500)

@@ -91,6 +91,9 @@ class AgentState(StrictModel):
     retries: dict[str, int] = Field(default_factory=dict)
     replans: int = 0
     tokens_reserved: int = 0
+    tokens_estimated: int = 0
+    tokens_actual: int = 0
+    tokens_unsettled: int = 0
     observations: list[ToolObservation] = Field(default_factory=list)
     evaluation: EvaluationResult | None = None
     knowledge: list[dict[str, Any]] = Field(default_factory=list)

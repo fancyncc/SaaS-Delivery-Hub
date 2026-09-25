@@ -223,6 +223,12 @@ async def process_sources(session, tenant_id, limit=10):
     for source in published:
         if not source.active or not await current(session, source):
             source.phase, source.active, source.attempts = "pending", False, 0
+        elif source.index_identity != index_identity():
+            # Deployment/model changes must not leave ready-but-unsearchable
+            # sources stranded forever. Rebuild through the normal atomic path.
+            source.phase, source.attempts, source.error_code = "pending", 0, ""
+            source.generation += 1
+            source.chunks_done, source.chunks_total = 0, 0
         source.updated_at = utcnow()
     rows = (await session.scalars(select(RetrievalSource).where(RetrievalSource.tenant_id == tenant_id,
         RetrievalSource.phase.in_(["pending", "failed"]), RetrievalSource.attempts < 3)
@@ -243,7 +249,8 @@ async def process_sources(session, tenant_id, limit=10):
     return len(rows)
 
 
-async def retrieve(session, tenant_id, query, limit=5, *, knowledge_only=False, inspection_candidates=False, **scope):
+async def retrieve(session, tenant_id, query, limit=5, *, knowledge_only=False,
+                   include_knowledge=True, inspection_candidates=False, **scope):
     from sqlalchemy import text
 
     from backend.retrieval_models import embeddings, rank
@@ -254,6 +261,8 @@ async def retrieve(session, tenant_id, query, limit=5, *, knowledge_only=False, 
     sources = await authorized_sources(session, tenant_id, **scope)
     if knowledge_only:
         sources = [source for source in sources if source.kind == "knowledge"]
+    elif not include_knowledge:
+        sources = [source for source in sources if source.kind != "knowledge"]
     ready = {source.id: source for source in sources if source.phase == "ready"
              and source.index_identity == index_identity() and source.indexed_generation == source.generation}
     if not ready:

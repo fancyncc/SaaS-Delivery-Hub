@@ -69,6 +69,11 @@ async def test_workflow_pauses_and_resumes_at_approval(client):
     started = await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})
     run = started.json()["data"]
     assert run["status"] == "waiting_approval" and run["current_node"] == "plan_approval"
+    tasks = (await client.get("/api/tasks")).json()["data"]
+    task = next(item for item in tasks if item["run_id"] == run["id"])
+    assert task["project_name"] == p["name"]
+    assert task["run_number"] == run["run_number"]
+    assert task["current_node"] == "plan_approval"
     approvals = (await client.get("/api/approvals")).json()["data"]
     approver = await role_client(client, p["id"], "approver", "approver-1@example.com")
     try:

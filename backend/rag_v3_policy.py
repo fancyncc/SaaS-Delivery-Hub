@@ -2,7 +2,15 @@
 import re
 from dataclasses import dataclass
 
-PIPELINE_SCHEMA = 2
+PIPELINE_SCHEMA = 3
+
+
+def retrieval_question(question):
+    # Business users say "attributes" while schemas call them "fields".
+    # Apply the same intent expansion to recall and reranking.
+    if re.search(r'属性|字段|\b(?:attributes?|properties|fields?)\b', question, re.I):
+        return question + ' 字段定义 数据模型 字段字典'
+    return question
 
 
 @dataclass(frozen=True)
@@ -31,6 +39,9 @@ def query_policy(question):
         types.append('comparison')
     # Preserve the original query; split only explicitly named comparison sides.
     queries = [question]
+    expanded = retrieval_question(question)
+    if expanded != question:
+        queries.append(expanded)
     if 'condition' in types:
         queries.append(question + ' 适用条件 例外 限制 exceptions restrictions')
     sides = re.findall(r'[“「"]([^”」"\n]+)[”」"]', question)

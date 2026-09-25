@@ -83,3 +83,21 @@ async def test_index_failure_is_sanitized_and_stops_after_three_attempts(monkeyp
         assert source.error_code == 'INDEX_DEPENDENCY_FAILED'
         assert await process_sources(session, tenant.id) == 0
         assert await session.scalar(select(func.count()).select_from(RetrievalChunk)) == 0
+
+
+async def test_stale_ready_index_rebuilds_without_uploading_again():
+    from backend.knowledge import index_identity
+    async with SessionLocal() as session:
+        tenant = await session.scalar(select(Tenant).where(Tenant.slug == 'legacy-demo'))
+        document = KnowledgeDocument(tenant_id=tenant.id, title='旧索引自动恢复', version=1,
+            module='test', source='内部规范', license='内部授权', body='售后工单属性包含状态和负责人。')
+        session.add(document)
+        await session.flush()
+        source = await sync_knowledge(session, document)
+        await index_source(session, source)
+        source.index_identity = 'old-deployment-address'
+        await session.flush()
+        assert await process_sources(session, tenant.id) == 1
+        assert source.phase == 'ready' and source.index_identity == index_identity()
+        assert source.generation == source.indexed_generation == 2
+        assert await session.scalar(select(func.count()).select_from(RetrievalChunk)) == 1

@@ -9,7 +9,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.access import accessible_project_or_404, require_project_permission
@@ -17,10 +17,9 @@ from backend.chat import (
     MAX_FILE_BYTES,
     answer_question,
     evidence,
-    extract_document,
     retrieval_summary,
 )
-from backend.chat_models import ChatConversation, ChatMemory
+from backend.chat_models import ChatContextSnapshot, ChatContextTask, ChatConversation, ChatMemory
 from backend.config import get_settings
 from backend.db import get_session
 from backend.models import uid
@@ -37,31 +36,49 @@ async def customer(user: Principal = Depends(current_principal)) -> Principal:
     return user
 
 
-async def owned(session, identifier, user):
+async def owned(session, identifier, user, *, hydrate_history=True):
     row = await session.scalar(select(ChatConversation).where(ChatConversation.id == str(identifier), ChatConversation.tenant_id == user.tenant_id, ChatConversation.user_id == user.user_id))
     if row is None:
         raise HTTPException(404, "对话不存在")
     if row.project_id:
         project = await accessible_project_or_404(session, row.project_id, user)
         await require_project_permission(session, project, user, "project.view")
-    return row
+    from backend.chat_history import hydrate
+    return await hydrate(session, row) if hydrate_history else row
 
 
 def detail(row):
+    paginated = getattr(row, "_history_normalized", False)
+    start = max(0, len(row.messages) - 50) if paginated else 0
     return {"id": row.id, "title": row.title, "project_id": row.project_id, "version": row.version, "archived": row.archived, "pinned": row.pinned, "unread": row.unread,
-            "messages": [dict(m, answer=retrieval_summary(m['question'], m['citations'])) if m.get('mode') == 'retrieval' else m for m in row.messages],
+            "messages": [dict(m, answer=retrieval_summary(m['question'], m['citations'])) if m.get('mode') == 'retrieval' else m for m in row.messages[start:]],
+            "next_before": start + 1 if start else None, "message_count": len(row.messages),
             "documents": [{"id": d["id"], "name": d["name"], "characters": len(d["text"])} for d in row.documents]}
 
 
 async def save(session, row, expected_version, **values):
-    result = await session.execute(update(ChatConversation).where(ChatConversation.id == row.id, ChatConversation.version == expected_version).values(**values, version=expected_version + 1))
+    from backend.context_maintenance import enqueue
+    from backend.conversation_state import message_id
+    if "messages" in values:
+        values["messages"] = [dict(m, id=message_id(m, i)) for i, m in enumerate(values["messages"])]
+    stored_messages = values.get("messages")
+    normalized = get_settings().chat_history_enabled or getattr(row, "_history_normalized", False)
+    db_values = {k: v for k, v in values.items() if k != "messages" or not normalized}
+    result = await session.execute(update(ChatConversation).where(ChatConversation.id == row.id, ChatConversation.version == expected_version).values(**db_values, version=expected_version + 1))
     if result.rowcount != 1:
         raise HTTPException(409, "对话已在其他窗口更新，请刷新后重试")
+    if normalized and stored_messages is not None:
+        from backend.chat_history import persist
+        await persist(session, row, stored_messages)
     if "documents" in values and get_settings().rag_mode == "real":
         from backend.retrieval_sources import sync_conversation
         await sync_conversation(session, row, documents=values["documents"])
+    if "messages" in values or "documents" in values:
+        await enqueue(session, row, expected_version + 1)
     await session.commit()
     await session.refresh(row)
+    from backend.chat_history import hydrate
+    await hydrate(session, row)
     return {"data": detail(row)}
 
 
@@ -113,7 +130,7 @@ async def conversations(user: Principal = Depends(customer), session: AsyncSessi
             if exc.status_code not in {403, 404}:
                 raise
     visible.sort(key=lambda item: item['updated_at'] or '', reverse=True)
-    return {"data": {"conversations": visible, "mode": "llm" if get_settings().model_mode == "real" else "retrieval", "assistant": profile()}}
+    return {"data": {"conversations": visible, "mode": "llm" if get_settings().model_mode == "real" else "retrieval", "assistant": profile(), "features": {"memory_items": get_settings().chat_memory_items_enabled, "memory_candidates": get_settings().chat_memory_candidates_enabled}}}
 
 
 @router.get("/assistant")
@@ -149,13 +166,24 @@ async def update_memory(payload: MemoryUpdate, user: Principal = Depends(custome
         if payload.expected_version != 0:
             raise HTTPException(409, "记忆版本不一致")
         session.add(ChatMemory(tenant_id=user.tenant_id, user_id=user.user_id, content=payload.content.strip()))
+    from backend.memory_items import sync_legacy
+    await session.flush()
+    current = await memory(user, session)
+    await sync_legacy(session, user, current["data"]["content"], current["data"]["version"])
     await session.commit()
     return await memory(user, session)
 
 
 @router.get("/conversations/{identifier}")
 async def get_conversation(identifier: UUID, user: Principal = Depends(customer), session: AsyncSession = Depends(get_session)):
-    return {"data": detail(await owned(session, identifier, user))}
+    from backend.chat_history import page
+    from backend.chat_models import ChatHistoryMigration
+    row = await owned(session, identifier, user, hydrate_history=False)
+    result = detail(row)
+    marker = await session.get(ChatHistoryMigration, row.id)
+    if get_settings().chat_history_enabled or (marker and marker.activated):
+        result.update(await page(session, row))
+    return {"data": result}
 
 
 @router.patch("/conversations/{identifier}")
@@ -186,6 +214,10 @@ async def delete_conversation(identifier: UUID, user: Principal = Depends(custom
     if get_settings().rag_mode == "real":
         from backend.retrieval_sources import sync_conversation
         await sync_conversation(session, row, documents=[])
+    from backend.chat_models import ChatHistoryMigration, ChatMessage, MemoryCandidate, MemoryItem
+    await session.execute(delete(MemoryItem).where(MemoryItem.user_id == user.user_id, MemoryItem.scope == "conversation", MemoryItem.scope_id == row.id))
+    for model in (MemoryCandidate, ChatMessage, ChatHistoryMigration, ChatContextTask, ChatContextSnapshot):
+        await session.execute(delete(model).where(model.conversation_id == row.id))
     await session.delete(row)
     await session.commit()
     return {"data": {"deleted": True}}
@@ -229,13 +261,18 @@ async def send(identifier: UUID, payload: MessageCreate, request: Request, user:
     if row.version != payload.expected_version:
         raise HTTPException(409, "对话已更新，请刷新后重试")
     require_unarchived(row)
-    if len(row.messages) >= 200:
-        raise HTTPException(422, "当前对话已达到 200 轮，请新建对话；长期记忆会保留")
+    turn_limit = 2000 if get_settings().chat_history_enabled or getattr(row, "_history_normalized", False) else 200
+    if len(row.messages) >= turn_limit:
+        raise HTTPException(422, f"当前对话已达到 {turn_limit} 轮，请新建对话；长期记忆会保留")
     question = payload.question.strip()
     if not question:
         raise HTTPException(422, "请输入问题")
     await enforce_rate_limit(f"chat:{user.tenant_id}:{user.user_id}", 20, 60)
+    from backend.context_maintenance import bootstrap_context
+    await bootstrap_context(session, row, payload.expected_version)
     memo = await memory(user, session)
+    from backend.memory_items import effective_memory
+    memo["data"]["content"] = await effective_memory(session, user, row, memo["data"]["content"])
     if payload.stream:
         from backend.chat_stream import generate
         return StreamingResponse(generate(session, row, user, payload, request.app.openapi(),
@@ -247,8 +284,25 @@ async def send(identifier: UUID, payload: MessageCreate, request: Request, user:
         query += " " + row.messages[-1]['question'][-500:]
     try:
         sources = await evidence(session, row, user, query, request.app.openapi())
-        answer = await answer_question(question, row.messages, memo["data"]["content"] if payload.use_memory else "", sources)
+        from backend.chat_context import build_context
+        context, selected_memory, sources = await build_context(session, row, question, memo["data"]["content"] if payload.use_memory else "", sources)
+        answer = await answer_question(question, row.messages, selected_memory, sources, context=context)
     except (httpx.HTTPError, TimeoutError):
         raise HTTPException(503, "模型或检索服务暂不可用，请稍后重试；本次问题未保存") from None
     message = {"request_id": str(payload.request_id), "question": question, "created_at": datetime.now(UTC).isoformat(), **answer}
     return await save(session, row, payload.expected_version, messages=[*row.messages, message], title=row.title if row.messages or row.title != '新对话' else question[:120])
+
+
+@router.get("/conversations/{identifier}/context")
+async def get_context(identifier: UUID, user: Principal = Depends(customer), session: AsyncSession = Depends(get_session)):
+    from backend.chat_context import context_status
+    row = await owned(session, identifier, user)
+    return {"data": await context_status(session, row)}
+
+
+@router.get("/conversations/{identifier}/messages")
+async def message_page(identifier: UUID, before: int | None = Query(default=None, ge=1), limit: int = Query(default=50, ge=1, le=100),
+    user: Principal = Depends(customer), session: AsyncSession = Depends(get_session)):
+    from backend.chat_history import page
+    row = await owned(session, identifier, user, hydrate_history=False)
+    return {"data": await page(session, row, before, limit)}

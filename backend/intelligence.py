@@ -9,8 +9,9 @@ import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, ValidationError
 
-from backend.agent_budget import model_scope, reserve
+from backend.agent_budget import model_scope
 from backend.config import get_settings
+from backend.context_budget import preflight
 from backend.prompt_boundary import DATA_BOUNDARY
 from backend.schemas import GapAnalysisItem, RequirementSpec
 
@@ -56,16 +57,17 @@ async def structured(task: str, source: dict, schema: type[T], *, transport=None
                 "text": {"format": {"type": "json_schema", "name": schema.__name__, "strict": True, "schema": strict_schema(schema.model_json_schema())}},
             }
             if scope:
-                payload["max_output_tokens"] = 4096
+                payload["max_output_tokens"] = settings.model_max_output_tokens
             endpoint = "/responses"
             if settings.model_api_style == "chat_completions":
                 endpoint = "/chat/completions"
                 payload = {"model": model_name, "messages": [
                     {"role": "system", "content": payload["instructions"] + " 只返回符合此 JSON Schema 的 JSON 对象：" + json.dumps(schema.model_json_schema(), ensure_ascii=False)},
                     {"role": "user", "content": payload["input"]}],
-                    "response_format": {"type": "json_object"}, "temperature": 0.2, "max_tokens": 4096}
-            if scope:
-                reserve(json.dumps(payload, ensure_ascii=False))
+                    "response_format": {"type": "json_object"}, "temperature": 0.2, "max_tokens": settings.model_max_output_tokens}
+            if endpoint == "/responses":
+                payload["max_output_tokens"] = settings.model_max_output_tokens
+            reservation = preflight(payload)
             response = await client.post(base_url.rstrip("/") + endpoint, headers={"Authorization": f"Bearer {api_key}"} if api_key else {}, json=payload)
             if response.status_code in {401, 403}:
                 raise HTTPException(503, "模型服务认证失败")
@@ -76,6 +78,7 @@ async def structured(task: str, source: dict, schema: type[T], *, transport=None
                 continue
             try:
                 body = response.json()
+                reservation.settle(body.get("usage"))
                 if settings.model_api_style == "chat_completions":
                     choice = body["choices"][0]
                     if choice.get("finish_reason") != "stop":

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import math
 import secrets
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -11,7 +12,7 @@ from uuid import UUID
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,6 +48,7 @@ from backend.models import (
 from backend.onboarding import router as onboarding_router
 from backend.platform_routes import router as platform_router
 from backend.project_access_routes import router as project_access_router
+from backend.project_task_routes import router as project_task_router
 from backend.retrieval_status import router as retrieval_status_router
 from backend.schemas import (
     ApprovalDecision,
@@ -84,9 +86,16 @@ async def lifespan(_: FastAPI):
     if get_settings().local_indexer_enabled and get_settings().rag_mode == "real":
         from backend.local_indexer import maintain_indexes
         task = asyncio.create_task(maintain_indexes())
+    context_task = None
+    if get_settings().chat_context_local_worker and get_settings().chat_context_mode != "off":
+        from backend.context_maintenance import maintain_local
+        context_task = asyncio.create_task(maintain_local())
     try:
         yield
     finally:
+        if context_task:
+            context_task.cancel()
+            await asyncio.gather(context_task, return_exceptions=True)
         if task:
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
@@ -135,8 +144,13 @@ app.include_router(support_router)
 app.include_router(platform_support_router)
 app.include_router(delivery_router)
 app.include_router(knowledge_router)
+app.include_router(project_task_router)
 app.include_router(chat_router)
+from backend.memory_items import router as memory_router
+
+app.include_router(memory_router)
 from backend.chat_mcp import router as mcp_router
+
 app.include_router(mcp_router)
 app.include_router(retrieval_status_router)
 
@@ -204,12 +218,38 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/ready")
+async def ready():
+    from pathlib import Path
+
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from backend.db import SessionLocal
+
+    expected = ScriptDirectory.from_config(
+        Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    ).get_current_head()
+    try:
+        async with asyncio.timeout(3):
+            async with SessionLocal() as session:
+                current = await session.scalar(text("SELECT version_num FROM alembic_version"))
+        if current != expected:
+            raise HTTPException(503, {"code": "SCHEMA_NOT_READY"})
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(503, {"code": "DATABASE_NOT_READY"}) from None
+    return {"status": "ready", "schema_revision": current}
+
+
 @app.get("/metrics", include_in_schema=False, response_class=PlainTextResponse)
 async def metrics():
     from prometheus_client import generate_latest
 
     from backend.db import SessionLocal
-    from backend.models import MailDelivery, WorkflowOutbox
+    from backend.models import KnowledgeDocument, MailDelivery, WorkflowOutbox
+    from backend.rag_v3_models import V3Document
     lines = [generate_latest().decode(), "saas_agent_up 1"]
     async with SessionLocal() as session:
         for model, column, name in ((AgentRun, AgentRun.status, "saas_runs"), (Approval, Approval.status, "saas_approvals"), (ImportJob, ImportJob.status, "saas_imports"), (MailDelivery, MailDelivery.status, "saas_mail")):
@@ -217,6 +257,54 @@ async def metrics():
                 lines.append(f'{name}{{status="{status}"}} {count}')
         backlog = await session.scalar(select(func.count()).select_from(WorkflowOutbox).where(WorkflowOutbox.processed.is_(False)))
         lines.append(f"saas_outbox_pending {backlog}")
+        phases = {phase: 0 for phase in ("pending", "parsing", "indexing", "ready", "failed")}
+        binary_counts = {}
+        binary_parse_ms = {fmt: [] for fmt in ("pdf", "pptx", "xlsx")}
+        ocr_pages = 0
+        oldest = None
+        # The monitoring request has no tenant principal. Query each tenant under
+        # its RLS context so the aggregate reflects the actual queue state.
+        tenant_ids = (list(await session.scalars(select(Tenant.id)))
+                      if session.get_bind().dialect.name == "postgresql" else [None])
+        for tenant_id in tenant_ids:
+            if tenant_id:
+                await session.execute(
+                    text("SELECT set_config('app.current_tenant_id', :tenant_id, true)"),
+                    {"tenant_id": tenant_id},
+                )
+            for phase, count in (await session.execute(
+                select(V3Document.phase, func.count()).group_by(V3Document.phase)
+            )).all():
+                if phase in phases:
+                    phases[phase] += count
+            for filename, phase, document_metrics in (await session.execute(
+                select(V3Document.filename, V3Document.phase, V3Document.metrics)
+            )).all():
+                fmt = filename.rsplit(".", 1)[-1].lower()
+                if fmt not in binary_parse_ms:
+                    continue
+                binary_counts[fmt, phase] = binary_counts.get((fmt, phase), 0) + 1
+                if phase == "ready" and isinstance(document_metrics, dict):
+                    parse_ms = document_metrics.get("parse_ms")
+                    if isinstance(parse_ms, (int, float)) and math.isfinite(parse_ms):
+                        binary_parse_ms[fmt].append(parse_ms)
+                    ocr_pages += document_metrics.get("ocr_pages", 0)
+            tenant_oldest = await session.scalar(select(func.min(KnowledgeDocument.created_at))
+                .join(V3Document, V3Document.origin_id == KnowledgeDocument.id)
+                .where(V3Document.phase.in_(("pending", "parsing", "indexing"))))
+            if tenant_oldest and (oldest is None or tenant_oldest < oldest):
+                oldest = tenant_oldest
+        for phase, count in phases.items():
+            lines.append(f'saas_rag_v3_documents{{phase="{phase}"}} {count}')
+        for (fmt, phase), count in sorted(binary_counts.items()):
+            lines.append(f'saas_rag_v3_binary_documents{{format="{fmt}",phase="{phase}"}} {count}')
+        for fmt, values in binary_parse_ms.items():
+            if values:
+                values.sort()
+                lines.append(f'saas_rag_v3_parse_p95_ms{{format="{fmt}"}} {values[math.ceil(len(values) * 0.95) - 1]}')
+        lines.append(f"saas_rag_v3_ocr_pages_indexed {ocr_pages}")
+        age = max(0, (datetime.now(UTC) - oldest).total_seconds()) if oldest else 0
+        lines.append(f"saas_rag_v3_oldest_pending_seconds {age}")
     return "\n".join(lines) + "\n"
 
 
@@ -291,15 +379,17 @@ async def get_project(project_id: UUID, request: Request, user: Principal = Depe
 
 @app.get("/api/tasks")
 async def my_tasks(request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
-    runs = (await session.scalars(select(AgentRun).join(Project, AgentRun.project_id == Project.id).where(accessible_project_filter(user), Project.deleted_at.is_(None), AgentRun.status.in_(["preparing_materials", "waiting_approval", "blocked", "failed", "cancelled"])).order_by(AgentRun.updated_at.desc()))).all()
+    runs = (await session.execute(select(AgentRun, Project.name).join(Project, AgentRun.project_id == Project.id).where(accessible_project_filter(user), Project.deleted_at.is_(None), AgentRun.status.in_(["preparing_materials", "waiting_approval", "blocked", "failed", "cancelled"])).order_by(AgentRun.updated_at.desc()))).all()
     tasks = []
-    for run in runs:
+    for run, project_name in runs:
         latest = await session.scalar(select(func.max(AgentRun.run_number)).where(AgentRun.project_id == run.project_id))
         if latest != run.run_number:
             continue
         actions = await run_actions(session, run, user)
         if actions:
-            tasks.append({"run_id": run.id, "project_id": run.project_id, "status": run.status, "reason": run.state.get("blocking_reason"), "actions": actions})
+            tasks.append({"run_id": run.id, "project_id": run.project_id, "project_name": project_name,
+                          "run_number": run.run_number, "current_node": run.current_node,
+                          "status": run.status, "reason": run.state.get("blocking_reason"), "actions": actions})
     return envelope(request, tasks)
 
 

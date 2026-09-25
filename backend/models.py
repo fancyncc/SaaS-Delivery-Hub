@@ -526,6 +526,7 @@ class KnowledgeDocument(Base):
     __tablename__ = "knowledge_documents"
     __table_args__ = (UniqueConstraint("tenant_id", "title", "version"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    submitted_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
     project_id: Mapped[str | None] = mapped_column(ForeignKey("implementation_projects.id"), nullable=True, index=True)
     title: Mapped[str] = mapped_column(String(160))
@@ -542,6 +543,61 @@ class KnowledgeDocument(Base):
     index_error: Mapped[str] = mapped_column(String(100), default="")
     index_version: Mapped[str] = mapped_column(String(160), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProjectTask(Base):
+    __tablename__ = "project_tasks"
+    __table_args__ = (CheckConstraint(
+        "status IN ('todo','in_progress','blocked','pending_review','changes_requested','done')",
+        name="ck_project_task_status",
+    ),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    project_id: Mapped[str] = mapped_column(ForeignKey("implementation_projects.id", ondelete="CASCADE"), index=True)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
+    title: Mapped[str] = mapped_column(String(160))
+    description: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="todo")
+    blocking_reason: Mapped[str] = mapped_column(Text, default="")
+    assignee_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    due_date: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    created_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProjectTaskDocument(Base):
+    __tablename__ = "project_task_documents"
+    __table_args__ = (UniqueConstraint("task_id", "document_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("implementation_projects.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("project_tasks.id", ondelete="CASCADE"), index=True)
+    document_id: Mapped[str] = mapped_column(ForeignKey("knowledge_documents.id"), index=True)
+    submitted_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class ProjectTaskReview(Base):
+    __tablename__ = "project_task_reviews"
+    __table_args__ = (
+        UniqueConstraint("task_id", "round"),
+        CheckConstraint("status IN ('pending','approved','rejected')", name="ck_project_task_review_status"),
+    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("implementation_projects.id", ondelete="CASCADE"), index=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("project_tasks.id", ondelete="CASCADE"), index=True)
+    round: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    document_ids: Mapped[list] = mapped_column(JSON, default=list)
+    submission_comment: Mapped[str] = mapped_column(Text, default="")
+    decision_comment: Mapped[str] = mapped_column(Text, default="")
+    submitted_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    decided_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class MailDelivery(Base):

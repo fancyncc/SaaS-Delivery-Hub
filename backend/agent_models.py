@@ -52,3 +52,18 @@ class Experience(Base):
     verified: Mapped[bool] = mapped_column(Boolean, default=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class AgentLesson(Base):
+    __tablename__ = "agent_lessons"
+    __table_args__ = (UniqueConstraint("project_id", "tool", "category", "workflow_version"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("implementation_projects.id"), index=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("agent_runs.id"), index=True)
+    tool: Mapped[str] = mapped_column(String(80))
+    category: Mapped[str] = mapped_column(String(32))
+    workflow_version: Mapped[str] = mapped_column(String(40))
+    advice: Mapped[str] = mapped_column(Text)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+    verified: Mapped[bool] = mapped_column(Boolean, default=False)

@@ -25,8 +25,8 @@ async def lifespan(app):
             settings = get_settings()
             if settings.embedding_mode != "local" or settings.reranker_mode != "local":
                 raise ValueError("model service requires local mode")
-            await queue.submit(lambda: embeddings(["检索服务预热"], query=True, _settings=s))
-            await queue.submit(lambda: rank("成员导入", [{"text": "成员导入需先校验邮箱"}]))
+            await queue.submit(lambda: embeddings(["检索服务预热"], query=True, _settings=settings))
+            await queue.submit(lambda: rank("成员导入", [{"text": "成员导入需先校验邮箱"}], _settings=settings))
             app.state.ready = True
         except Exception as exc:
             app.state.warmup_error = "MODEL_WARMUP_FAILED"

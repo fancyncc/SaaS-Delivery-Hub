@@ -1,7 +1,7 @@
 from uuid import uuid4
 
 from backend.db import SessionLocal
-from backend.models import Project, AgentRun
+from backend.models import AgentRun, Project
 from tests.test_api import project_body
 
 

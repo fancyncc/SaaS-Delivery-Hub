@@ -22,6 +22,18 @@ TENANT_TABLES = [
     "approval_requests", "idempotency_records", "import_jobs", "audit_events", "evaluation_runs",
 ]
 
+# The bootstrap migration reads today's ORM metadata. Tables owned by later
+# migrations must stay out of a fresh database until their revision runs.
+LATER_TABLES = {
+    "knowledge_chunks", "agent_actions", "agent_memories",
+    "chat_conversations", "chat_memories",
+    "chat_context_snapshots", "chat_context_tasks", "chat_messages",
+    "chat_history_migrations", "chat_memory_items", "chat_memory_preferences",
+    "chat_memory_candidates", "rag_v3_documents",
+    "rag_v3_nodes", "rag_v3_units", "project_tasks",
+    "project_task_documents", "project_task_reviews",
+}
+
 
 def _columns(inspector, table: str) -> set[str]:
     return {column["name"] for column in inspector.get_columns(table)}
@@ -33,7 +45,7 @@ def upgrade() -> None:
     # Agent tables require the pgvector extension installed by migration 0012.
     # Do not let the current ORM metadata create future vector tables early.
     Base.metadata.create_all(bind=bind, tables=[table for table in Base.metadata.sorted_tables
-        if table.name not in {"knowledge_chunks", "agent_actions", "agent_memories"}])
+        if table.name not in LATER_TABLES])
     inspector = sa.inspect(bind)
     tables = set(inspector.get_table_names())
 

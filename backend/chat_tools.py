@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from backend.chat_mcp import call_tool
 from backend.config import get_settings
+from backend.context_budget import preflight
 from backend.prompt_boundary import DATA_BOUNDARY
 
 
@@ -36,14 +37,16 @@ async def tool_context(session, row, user, query, schema):
         {"role": "user", "content": query}]
     async with httpx.AsyncClient(timeout=s.model_timeout) as client:
         for round_number in range(1, 3):
+            payload = {"model": model, "stream": False, "messages": messages, "tools": [tool],
+                "tool_choice": {"type": "function", "function": {"name": "search_authorized_context"}} if round_number == 1 else "auto",
+                "max_tokens": min(1024, s.model_max_output_tokens)}
+            reservation = preflight(payload)
             response = await client.post(base.rstrip("/") + "/chat/completions",
-                headers={"Authorization": f"Bearer {key}"} if key else {},
-                json={"model": model, "stream": False, "messages": messages, "tools": [tool],
-                    "tool_choice": {"type": "function", "function": {"name": "search_authorized_context"}} if round_number == 1 else "auto",
-                    "max_tokens": 1024})
+                headers={"Authorization": f"Bearer {key}"} if key else {}, json=payload)
             if response.status_code in {401, 403}:
                 raise HTTPException(503, "生成模型认证失败，请检查 MODEL_API_KEY 和 MODEL_BASE_URL；本次回答未保存")
             response.raise_for_status()
+            reservation.settle(response.json().get("usage"))
             message = response.json()["choices"][0]["message"]
             calls = message.get("tool_calls", [])
             if not calls:

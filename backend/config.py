@@ -46,11 +46,27 @@ class Settings(BaseSettings):
     model_name: str = ""
     model_api_key: str = ""
     model_timeout: int = 30
+    model_context_window: int = Field(default=32768, ge=2048)
+    model_max_output_tokens: int = Field(default=4096, ge=128)
+    model_tokenizer: str = ""  # explicit tiktoken:<encoding> or hf:<local path>
+    model_tokenizer_map: dict[str, str] = Field(default_factory=dict)
+    context_safety_ratio: float = Field(default=0.1, ge=0, le=0.5)
+    chat_context_tokens: int = Field(default=12000, ge=1000)
+    chat_context_mode: Literal["off", "shadow", "on"] = "off"
+    chat_summary_tokens: int = Field(default=1200, ge=200)
+    chat_context_local_worker: bool = False
+    chat_history_enabled: bool = False
+    chat_memory_items_enabled: bool = False
+    chat_memory_candidates_enabled: bool = False
+    context_scoring_mode: Literal["off", "shadow", "on"] = "off"
+    agent_experience_enabled: bool = False
     embedding_model: str = ""
     rag_mode: Literal["mock", "real"] = "mock"
-    rag_inspection_v2: bool = False
-    rag_inspection_v3: bool = False
     rag_v3_indexing_enabled: bool = False
+    rag_pdf_enabled: bool = True
+    rag_office_enabled: bool = True
+    rag_v3_relevance_mode: Literal["rules", "calibrated"] = "rules"
+    rag_v3_min_rerank_score: float = Field(default=0.5, allow_inf_nan=False)
     rag_v3_release: str = "evaluations/v3/release.json"
     rag_v3_model_profile: str = ""
     rag_inspection_calibration: str = "evaluations/inspection_calibration.json"

@@ -128,6 +128,7 @@ async def test_native_tool_protocol_and_fixed_scope(monkeypatch):
 
 async def test_gateway_ignoring_tools_uses_original_authorized_query(monkeypatch):
     from types import SimpleNamespace
+
     from backend import chat_tools
     s = get_settings()
     for key, value in {'model_mode': 'real', 'model_api_style': 'chat_completions',

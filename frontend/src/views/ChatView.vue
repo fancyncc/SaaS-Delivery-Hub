@@ -3,13 +3,15 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../auth'
 import RetrievalAnswer from '../components/RetrievalAnswer.vue'
+import ScopedMemory from '../components/ScopedMemory.vue'
 import { api, streamApi, writeHeaders } from '../api'
 
 type Citation = { id: string; title: string; source: string; text: string; number?: number }
 type Message = { request_id: string; question: string; answer: string; mode: string; citations: Citation[]; steps?: { stage: string; summary?: string; query?: string; source_count?: number; round?: number; action?: string }[] }
-type Conversation = { id: string; title: string; project_id: string | null; version: number; archived: boolean; pinned: boolean; unread: boolean; messages: Message[]; documents: { id: string; name: string; characters: number }[] }
+type Conversation = { next_before?: number | null; message_count?: number; id: string; title: string; project_id: string | null; version: number; archived: boolean; pinned: boolean; unread: boolean; messages: Message[]; documents: { id: string; name: string; characters: number }[] }
 type History = { version: number; archived: boolean; pinned: boolean; unread: boolean; id: string; title: string; project_id: string | null; message_count: number; preview: string; updated_at: string | null }
 const conversations = ref<History[]>([])
+const features = ref({ memory_items: false, memory_candidates: false })
 const route = useRoute(), router = useRouter(), auth = useAuthStore()
 const search = ref(''), historyLoading = ref(false), sidebarOpen = ref(false)
 const archiveView = ref(false)
@@ -57,11 +59,12 @@ async function refreshList() {
   const request = ++historyRequest
   historyLoading.value = true
   try {
-  const result = await api<{ conversations: typeof conversations.value; mode: string; assistant: NonNullable<typeof assistant.value> }>(`/api/chat/conversations?q=${encodeURIComponent(search.value.trim())}&archived=${archiveView.value}`)
+  const result = await api<{ conversations: typeof conversations.value; mode: string; assistant: NonNullable<typeof assistant.value>; features?: typeof features.value }>(`/api/chat/conversations?q=${encodeURIComponent(search.value.trim())}&archived=${archiveView.value}`)
   if (request !== historyRequest) return
   conversations.value = result.conversations
   mode.value = result.mode
   assistant.value = result.assistant
+  features.value = result.features || features.value
   } finally { if (request === historyRequest) historyLoading.value = false }
 }
 async function scrollBottom() {
@@ -131,6 +134,17 @@ async function send() {
     await refreshList(); await scrollBottom()
   })
 }
+async function loadOlder() {
+  await perform(async () => {
+    if (!active.value?.next_before) return
+    const previousHeight = messagesElement.value?.scrollHeight || 0
+    const page = await api<{ messages: Message[]; next_before: number | null }>(`/api/chat/conversations/${active.value.id}/messages?before=${active.value.next_before}`)
+    active.value.messages = [...page.messages, ...active.value.messages]
+    active.value.next_before = page.next_before
+    await nextTick()
+    if (messagesElement.value) messagesElement.value.scrollTop += messagesElement.value.scrollHeight - previousHeight
+  })
+}
 async function upload(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
@@ -190,7 +204,7 @@ async function deleteConversation() {
 async function saveMemory(clear = false) {
   await perform(async () => {
     memory.value = await api('/api/chat/memory', { method: 'PUT', headers: writeHeaders(), body: JSON.stringify({ content: clear ? '' : memory.value.content, expected_version: memory.value.version }) })
-    status.value = clear ? '长期记忆已清空。' : '长期记忆已保存，可在本空间的新对话中使用。'
+    status.value = clear ? (features.value.memory_items ? '原有记忆已清空。' : '长期记忆已清空。') : '偏好已保存，可在本空间的新对话中使用。'
   })
 }
 onMounted(() => perform(async () => {
@@ -205,6 +219,10 @@ async function copyConversation() {
   if (!managementTarget.value || busy.value) return
   try {
     const c = await api<Conversation>(`/api/chat/conversations/${managementTarget.value.id}`)
+    while (c.next_before) {
+      const page = await api<{ messages: Message[]; next_before: number | null }>(`/api/chat/conversations/${c.id}/messages?before=${c.next_before}`)
+      c.messages = [...page.messages, ...c.messages]; c.next_before = page.next_before
+    }
     await navigator.clipboard.writeText(c.messages.map(m => `你：${m.question}\n\nAI 助手：${m.answer}`).join('\n\n'))
     status.value = '对话内容已复制。'; manageDialog.value?.close()
   } catch { managementError.value = '复制失败，请重试或手动选择内容复制。' }
@@ -238,12 +256,12 @@ function openConversationWindow() {
       <div v-if="active?.archived" class="notice">此对话已归档。<button :disabled="busy" @click="manage(active); updateConversation({ archived: false })">恢复对话</button></div>
       <div ref="messagesElement" class="chat-messages" aria-live="polite">
         <div v-if="!active?.messages.length && !streamingQuestion" class="chat-empty"><span class="empty-mark">✳</span><h2>有什么可以帮你？</h2><p>提问、了解项目进展，或从资料中寻找答案。</p><div class="suggestions"><button :disabled="busy" @click="question = '我的项目当前进行到哪一步？'">查看项目进展 ↗</button><button :disabled="busy" @click="question = '总结我上传的文档，列出关键要求'">总结文档要点 ↗</button></div></div>
-        <div class="conversation-content"><article v-for="message in active?.messages || []" :key="message.request_id" class="chat-turn"><div class="chat-question">{{ message.question }}</div><div class="answer-label">✳ AI 助手</div><RetrievalAnswer :answer="message.answer" :citations="message.citations" /><details v-if="message.steps?.length" class="execution-details"><summary>查看执行步骤</summary><p v-for="(step, i) in message.steps" :key="i">{{ step.summary || (step.stage === 'observe' ? '取得 ' + step.source_count + ' 条来源' : step.query || '正在处理问题') }}</p></details></article><article v-if="streamingQuestion" class="chat-turn"><div class="chat-question">{{ streamingQuestion }}</div><div class="answer-label">✳ AI 助手</div><p class="stream-answer">{{ streamingAnswer }}</p><p class="muted" role="status">{{ executionStep || '正在处理…' }}</p></article></div>
+        <div class="conversation-content"><button v-if="active?.next_before" :disabled="busy" @click="loadOlder">加载更早的消息</button><article v-for="message in active?.messages || []" :key="message.request_id" class="chat-turn"><div class="chat-question">{{ message.question }}</div><div class="answer-label">✳ AI 助手</div><RetrievalAnswer :answer="message.answer" :citations="message.citations" /><details v-if="message.steps?.length" class="execution-details"><summary>查看执行步骤</summary><p v-for="(step, i) in message.steps" :key="i">{{ step.summary || (step.stage === 'observe' ? '取得 ' + step.source_count + ' 条来源' : step.query || '正在处理问题') }}</p></details></article><article v-if="streamingQuestion" class="chat-turn"><div class="chat-question">{{ streamingQuestion }}</div><div class="answer-label">✳ AI 助手</div><p class="stream-answer">{{ streamingAnswer }}</p><p class="muted" role="status">{{ executionStep || '正在处理…' }}</p></article></div>
       </div>
-      <footer class="chat-composer"><form @submit.prevent="send"><div v-if="active?.documents.length" class="chat-files"><span v-for="doc in active.documents" :key="doc.id">{{ doc.name }} <button type="button" :disabled="busy || active?.archived" :aria-label="`移除 ${doc.name}`" @click="removeDocument(doc.id)">×</button></span></div><textarea v-model="question" rows="2" maxlength="4000" required :disabled="busy || active?.archived" placeholder="向 AI 助手提问…" aria-label="输入问题" @keydown.ctrl.enter.prevent="send" @keydown.meta.enter.prevent="send" /><div class="compose-actions"><label class="upload-button">＋ 上传文档<input type="file" accept=".txt,.md,.csv,.json,.docx" :disabled="busy || active?.archived" @change="upload" /></label><label class="memory-toggle"><input v-model="useMemory" type="checkbox" :disabled="busy" />长期记忆</label><small class="keyboard-hint">Ctrl + Enter</small><button class="primary send-button" :disabled="busy || active?.archived || !question.trim()" aria-label="发送消息">{{ busy ? '…' : '↑' }}</button></div></form><p class="composer-note">回答可能有误，请结合来源核对重要信息。</p></footer>
+      <footer class="chat-composer"><form @submit.prevent="send"><div v-if="active?.documents.length" class="chat-files"><span v-for="doc in active.documents" :key="doc.id">{{ doc.name }} <button type="button" :disabled="busy || active?.archived" :aria-label="`移除 ${doc.name}`" @click="removeDocument(doc.id)">×</button></span></div><textarea v-model="question" rows="2" maxlength="4000" required :disabled="busy || active?.archived" placeholder="向 AI 助手提问…" aria-label="输入问题" @keydown.ctrl.enter.prevent="send" @keydown.meta.enter.prevent="send" /><div class="compose-actions"><label class="upload-button">＋ 上传文档<input type="file" accept=".txt,.md,.csv,.json,.docx,.pdf" :disabled="busy || active?.archived" @change="upload" /></label><label class="memory-toggle"><input v-model="useMemory" type="checkbox" :disabled="busy" />长期记忆</label><small class="keyboard-hint">Ctrl + Enter</small><button class="primary send-button" :disabled="busy || active?.archived || !question.trim()" aria-label="发送消息">{{ busy ? '…' : '↑' }}</button></div></form><p class="composer-note">回答可能有误，请结合来源核对重要信息。</p></footer>
     </section>
     <dialog ref="manageDialog" class="memory-dialog conversation-dialog" aria-labelledby="management-heading" @cancel="busy && $event.preventDefault()"><div class="memory-dialog-heading"><h2 id="management-heading">{{ managementMode === 'rename' ? '重命名对话' : managementMode === 'delete' ? '删除对话？' : '管理对话' }}</h2><button class="icon-button" :disabled="busy" aria-label="关闭对话管理" @click="manageDialog?.close()">×</button></div><p class="managed-title">{{ managementTarget?.title }}</p><p v-if="managementError" role="alert">{{ managementError }}</p><div v-if="managementMode === 'menu'" class="conversation-actions"><button :disabled="busy" @click="managementMode = 'rename'">✎ 重命名</button><button :disabled="busy" @click="updateConversation({ pinned: !managementTarget?.pinned })">{{ managementTarget?.pinned ? '取消置顶' : '置顶' }}</button><button :disabled="busy" @click="updateConversation({ unread: !managementTarget?.unread })">{{ managementTarget?.unread ? '标记为已读' : '标记为未读' }}</button><button :disabled="busy" @click="copyConversation">复制对话内容</button><button :disabled="busy" @click="openConversationWindow">在新窗口中打开</button><button :disabled="busy" @click="updateConversation({ archived: !managementTarget?.archived })">{{ managementTarget?.archived ? '↶ 恢复对话' : '▤ 归档对话' }}</button><button class="danger-action" :disabled="busy" @click="managementMode = 'delete'">删除对话</button></div><form v-else-if="managementMode === 'rename'" @submit.prevent="updateConversation({ title: renameTitle.trim() })"><label for="conversation-title">对话名称</label><input id="conversation-title" v-model="renameTitle" :disabled="busy" required maxlength="120" /><div class="memory-dialog-actions"><button type="button" :disabled="busy" @click="manageDialog?.close()">取消</button><button class="save-memory" :disabled="busy || !renameTitle.trim()">保存名称</button></div></form><template v-else><p>这将永久删除此对话的全部消息、附件和引用记录，无法恢复。项目资料和长期记忆不会删除。</p><div class="memory-dialog-actions"><button :disabled="busy" @click="manageDialog?.close()">取消</button><button class="delete-confirm" :disabled="busy" @click="deleteConversation">确认删除</button></div></template></dialog>
-    <dialog ref="memoryDialog" class="memory-dialog" @close="memoryOpen = false"><div class="memory-dialog-heading"><h2>长期记忆</h2><button class="icon-button" aria-label="关闭长期记忆" @click="memoryDialog?.close()">×</button></div><p>保存你的偏好和背景，让同一空间的新对话也能了解你。文档内容不会自动保存到记忆。</p><textarea v-model="memory.content" :disabled="busy" maxlength="4000" rows="6" placeholder="例如：请用中文回答，先给结论。我是项目实施负责人。" aria-label="长期记忆"/><small>{{ memory.content.length }} / 4000</small><p v-if="status && memoryOpen" class="chat-status" role="status">{{ status }}</p><p v-if="error && memoryOpen" role="alert">{{ error }}</p><div class="memory-dialog-actions"><button :disabled="busy" @click="saveMemory(true)">清空记忆</button><button class="save-memory" :disabled="busy" @click="saveMemory()">保存记忆</button></div></dialog>
+    <dialog ref="memoryDialog" class="memory-dialog" @close="memoryOpen = false"><div class="memory-dialog-heading"><h2>长期记忆</h2><button class="icon-button" aria-label="关闭长期记忆" @click="memoryDialog?.close()">×</button></div><ScopedMemory v-if="features.memory_items && memoryOpen" :project-id="active?.project_id || projectId" :conversation-id="active?.id" :projects="projects" :candidates-enabled="features.memory_candidates" /><p>原有记忆：保存你的偏好和背景，仅在当前空间使用。文档不会自动保存到记忆。</p><textarea v-model="memory.content" :disabled="busy" maxlength="4000" rows="6" placeholder="例如：请用中文回答，先给结论。我是项目实施负责人。" aria-label="长期记忆"/><small>{{ memory.content.length }} / 4000</small><p v-if="status && memoryOpen" class="chat-status" role="status">{{ status }}</p><p v-if="error && memoryOpen" role="alert">{{ error }}</p><div class="memory-dialog-actions"><button :disabled="busy" @click="saveMemory(true)">{{ features.memory_items ? '清空原有记忆' : '清空记忆' }}</button><button class="save-memory" :disabled="busy" @click="saveMemory()">{{ features.memory_items ? '保存原有记忆' : '保存记忆' }}</button></div></dialog>
   </main>
 </template>
 

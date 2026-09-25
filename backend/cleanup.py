@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.chat_models import ChatConversation, MemoryItem
 from backend.models import (
     AgentRun,
     Base,
@@ -22,6 +23,10 @@ async def purge_expired_projects(session: AsyncSession) -> int:
         Project.deleted_at.is_not(None), Project.deleted_at <= cutoff
     ))).all()
     for project in projects:
+        conversation_ids = list(await session.scalars(select(ChatConversation.id).where(ChatConversation.project_id == project.id)))
+        await session.execute(delete(MemoryItem).where(
+            ((MemoryItem.scope == "project") & (MemoryItem.scope_id == project.id)) |
+            ((MemoryItem.scope == "conversation") & MemoryItem.scope_id.in_(conversation_ids))))
         run_ids = list(await session.scalars(select(AgentRun.id).where(AgentRun.project_id == project.id)))
         workspace_ids = list(await session.scalars(select(SaaSWorkspace.id).where(SaaSWorkspace.project_id == project.id)))
         membership_ids = list(await session.scalars(select(ProjectMembership.id).where(ProjectMembership.project_id == project.id)))
@@ -40,7 +45,7 @@ async def purge_expired_projects(session: AsyncSession) -> int:
                     break
             if matched:
                 continue
-            for column, values in (("run_id", run_ids), ("workspace_id", workspace_ids), ("membership_id", membership_ids), ("grant_id", grant_ids)):
+            for column, values in (("conversation_id", conversation_ids), ("run_id", run_ids), ("workspace_id", workspace_ids), ("membership_id", membership_ids), ("grant_id", grant_ids)):
                 if column in table.c and values:
                     await session.execute(delete(table).where(table.c[column].in_(values)))
                     break

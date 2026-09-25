@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 TEST_DB = Path(__file__).parent / "test.db"
+os.environ["SAAS_ENV_FILE"] = str(Path(__file__).resolve().parents[1] / "config/rag.mock.env.example")
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{TEST_DB.as_posix()}"
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6399/15"
 os.environ["MODEL_MODE"] = "deterministic"
@@ -16,8 +17,8 @@ from sqlalchemy import select
 from backend.db import SessionLocal, bootstrap_identity, engine
 from backend.main import app
 from backend.models import Base, Tenant, TenantMembership, User
-from backend.retrieval_sources_models import RetrievalBase
 from backend.rate_limit import _fallback
+from backend.retrieval_sources_models import RetrievalBase
 from backend.security import hash_password
 
 

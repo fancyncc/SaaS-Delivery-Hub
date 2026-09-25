@@ -27,7 +27,7 @@ celery.conf.update(
     task_acks_late=True, task_reject_on_worker_lost=True, worker_prefetch_multiplier=1,
     task_soft_time_limit=240, task_time_limit=300,
     task_routes={"implementation.knowledge": {"queue": "indexing"}},
-    beat_schedule={"outbox": {"task": "implementation.dispatch", "schedule": 2.0}, "mail": {"task": "implementation.mail", "schedule": 10.0}, "knowledge": {"task": "implementation.knowledge", "schedule": 10.0}},
+    beat_schedule={"chat_context": {"task": "implementation.chat_context", "schedule": 5.0}, "outbox": {"task": "implementation.dispatch", "schedule": 2.0}, "mail": {"task": "implementation.mail", "schedule": 10.0}, "knowledge": {"task": "implementation.knowledge", "schedule": 10.0}},
 )
 
 
@@ -217,3 +217,9 @@ def build_knowledge_indexes():
 
 if __name__ == "__main__":
     asyncio.run(setup_checkpoints())
+
+
+@celery.task(name="implementation.chat_context")
+def build_chat_context():
+    from backend.context_maintenance import maintain_pending
+    asyncio.run(maintain_pending())

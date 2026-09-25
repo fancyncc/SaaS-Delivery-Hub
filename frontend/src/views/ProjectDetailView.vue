@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api, writeHeaders } from '../api'
 import ProjectDocumentsView from './ProjectDocumentsView.vue'
+import ProjectTasks from '../components/ProjectTasks.vue'
 const tab = ref('overview')
 const route = useRoute(), project = ref<any>(null), form = ref<any>({}), departments = ref('')
+const router = useRouter()
 const error = ref(''), success = ref(''), editing = ref(false), busy = ref(false)
 const labels: Record<string,string> = {draft:'草稿',ready:'待启动',in_progress:'实施中',blocked:'已阻塞',completed:'已完成',cancelled:'已取消',archived:'已归档'}
 const fields = [
@@ -37,7 +39,11 @@ async function save() {
   finally { busy.value = false }
 }
 watch(() => route.params.id, load, {immediate:true})
-watch(() => route.query.tab, value => { tab.value = value === 'documents' ? 'documents' : 'overview' }, {immediate:true})
+watch(() => route.query.tab, value => { tab.value = value === 'documents' || value === 'tasks' ? value : 'overview' }, {immediate:true})
+function selectTab(next: 'overview' | 'documents' | 'tasks') {
+  tab.value = next
+  router.replace({query: {...route.query, tab: next === 'overview' ? undefined : next}})
+}
 </script>
 <template>
   <main class="page-wrap project-detail">
@@ -45,10 +51,15 @@ watch(() => route.query.tab, value => { tab.value = value === 'documents' ? 'doc
     <p v-if="error" class="alert alert-danger" role="alert">{{error}}</p><p v-if="success" class="alert alert-success">{{success}}</p>
     <template v-if="project">
       <header class="detail-hero"><div><span class="eyebrow">PROJECT OVERVIEW</span><h1>{{project.name}}</h1><p>{{project.customer_name}} <span class="detail-badge">{{labels[project.lifecycle_status]}}</span></p></div>
-        <div class="detail-actions"><router-link v-if="project.latest_run" class="secondary" :to="`/app/runs/${project.latest_run.id}`">执行记录</router-link><button v-if="canEdit && !editing" class="primary" @click="editing=true; tab='overview'">编辑项目</button></div>
+        <div class="detail-actions"><router-link v-if="project.latest_run" class="secondary" :to="`/app/runs/${project.latest_run.id}`">执行记录</router-link><button v-if="canEdit && !editing" class="primary" @click="editing=true; selectTab('overview')">编辑项目</button></div>
       </header>
-      <nav class="project-detail-tabs" aria-label="项目详情导航"><button :class="{active:tab==='overview'}" @click="tab='overview'">项目概览</button><button :class="{active:tab==='documents'}" @click="tab='documents'">项目文档</button></nav>
+      <nav class="project-detail-navigation" aria-label="项目详情导航">
+        <button type="button" class="overview-action" :class="{active:tab==='overview'}" :aria-pressed="tab==='overview'" @click="selectTab('overview')">项目概览</button>
+        <button type="button" class="collaboration-action" :class="{active:tab==='documents'}" :aria-pressed="tab==='documents'" @click="selectTab('documents')"><span>文</span><b>项目文档</b><small>{{project.permissions?.includes('project.document.submit') && !['completed','archived','cancelled'].includes(project.lifecycle_status) ? '可提交' : '查看'}}</small></button>
+        <button type="button" class="collaboration-action" :class="{active:tab==='tasks'}" :aria-pressed="tab==='tasks'" @click="selectTab('tasks')"><span>任</span><b>协作任务</b><small>{{project.permissions?.includes('project.task.write') && !['completed','archived','cancelled'].includes(project.lifecycle_status) ? '创建与分配' : '查看'}}</small></button>
+      </nav>
       <ProjectDocumentsView v-if="tab==='documents'" embedded />
+      <ProjectTasks v-if="tab==='tasks'" :project="project" />
       <form v-show="tab==='overview'" class="panel detail-sheet" @submit.prevent="save">
         <div class="detail-section-title"><h2>{{editing ? '编辑项目资料' : '基本信息'}}</h2><span>版本 {{project.version}}</span></div>
         <div class="detail-fields"><label v-for="[key,label,type] in fields" :key="key"><span>{{label}}</span><input v-if="editing" v-model="form[key]" :type="type" :required="['name','customer_contact','contact_email','employee_count','target_go_live_date'].includes(key)" :min="type==='number'?1:undefined" :disabled="busy"><strong v-else>{{form[key] || '未填写'}}</strong></label><label><span>部门</span><input v-if="editing" v-model="departments" required :disabled="busy"><strong v-else>{{departments || '未填写'}}</strong></label></div>

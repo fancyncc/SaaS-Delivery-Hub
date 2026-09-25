@@ -182,8 +182,8 @@ class ProjectRevision(ProjectCreate):
 
 @router.patch("/projects/{project_id}")
 async def revise_project(project_id: UUID, payload: ProjectRevision, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
-    from backend.models import ProjectDocument
     from backend.config import get_settings
+    from backend.models import ProjectDocument
     project = await authorized_project(session, project_id, user, "project.edit")
     await session.refresh(project, with_for_update=True)
     if project.lifecycle_status in {"completed", "archived"}:
