@@ -27,12 +27,15 @@ from backend.models import KnowledgeDocument, Tenant
 from backend.rag_v3 import inspect
 from backend.rag_v3_index import index_document, register
 from backend.rag_v3_models import V3Node, V3Unit
+from backend.rag_v3_policy import PIPELINE_SCHEMA
 from backend.rag_v3_release import RELEASE_FORMATS, model_identity
 from backend.rag_v3_search import index
 from scripts.evaluate_v3_demo import citation_errors, summarize
 
 
 def contains_fact(text, fact):
+    text = re.sub(r"\s+", " ", text)
+    fact = re.sub(r"\s+", " ", fact)
     # Values/field names must be whole tokens; 17 must not match 170 or 2017.
     if re.fullmatch(r"[\w, .-]+", fact, re.ASCII):
         return bool(re.search(r"(?<!\w)" + re.escape(fact) + r"(?!\w)", text))
@@ -45,7 +48,9 @@ def annotated_facts(case):
 
 def count_facts(case, hits, origin_id):
     keys = case["source_keys"]
-    gold = [hit for hit in hits if hit["origin_id"] == origin_id and (
+    gold = [hit for hit in hits if hit["origin_id"] == origin_id
+        and (not case.get("required_page") or hit.get("location", {}).get("page") == case["required_page"])
+        and (
         not keys or any(re.search(r"(?<!\w)" + re.escape(key) + r"(?!\w)",
                                  hit["text"], re.I) for key in keys)
     )]
@@ -90,7 +95,7 @@ async def record_format(fmt, cases, args):
                     raise ValueError("Fixture path must remain within the corpus directory")
                 doc = KnowledgeDocument(
                     tenant_id=tenant_id, title=path.stem, version=1, module="evaluation",
-                    source=path.name, license="synthetic fixture", body="", index_status="v3_pending",
+                    source=path.name, license=getattr(args, "source_license", "synthetic fixture"), body="", index_status="v3_pending",
                 )
                 session.add(doc)
                 await session.flush()
@@ -112,7 +117,7 @@ async def record_format(fmt, cases, args):
             source_nodes = await session.scalars(select(V3Node).where(V3Node.document_id.in_(source_ids)))
             nodes = {node.id: (node.structure.get("context", "") + "\n" if node.structure.get("context") else "")
                      + node.structure["text"] for node in source_nodes}
-            await inspect(session, tenant_id, cases[0]["question"], [], args.budget)
+            await asyncio.wait_for(inspect(session, tenant_id, cases[0]["question"], [], args.budget), timeout=180)
             for case in cases:
                 origin_id = next(doc.id for doc in documents.values() if doc.source == Path(case["document"]).name)
                 expected = len(annotated_facts(case))
@@ -125,7 +130,7 @@ async def record_format(fmt, cases, args):
                 selected = result["chunks"]
                 observed = [*selected, *candidates]
                 row = {
-                    "id": case["id"], "format": fmt, "language": case["language"],
+                    "id": case["id"], "format": case["format"], "language": case["language"],
                     "split": case["split"], "kind": case["kind"], "budget": args.budget,
                     "necessary_total": expected,
                     "recalled_necessary": count_facts(case, candidates, origin_id),
@@ -165,7 +170,7 @@ async def main(args):
                 "complete": len(rows) == len(selected_cases),
                 "scope": "synthetic operational observations; not calibrated locked validation or paired model comparison",
                 "independent_review_completed": False, "baseline_measured": False,
-                "identity": model_identity(), "relevance_mode": "rules",
+                "identity": model_identity(), "pipeline_schema": PIPELINE_SCHEMA, "relevance_mode": "rules",
                 "cases_sha256": hashlib.sha256(args.cases.read_bytes()).hexdigest(),
                 "test_data_cleaned": True, "metrics": summarize(rows),
                 "per_format": {f: summarize([r for r in rows if r["format"] == f]) for f in args.formats if any(r["format"] == f for r in rows)},

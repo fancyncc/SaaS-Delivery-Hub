@@ -15,11 +15,12 @@
     "xlsx"
   ],
   "failures": [
-    "Independent review and additional diverse real-source annotations are pending",
-    "Calibrated paired older-baseline and locked validation are not complete",
+    "Independent review and customer-source annotations are pending; source-backed labels remain agent drafts",
+    "Calibrated paired older-baseline and independently approved locked validation are not complete",
     "Relevance classifier has not been trained on independently reviewed calibration labels",
-    "Current rules-mode synthetic selected-span coverage is 21.1%; every format is below 90%",
-    "Multilingual rules-mode selected-span coverage is 30.8%; only JSON reaches 90%"
+    "Current parser/pipeline 4 rules-mode synthetic coverage is 62.3%; only TXT reaches 90%",
+    "Source-pinned development coverage is 90.9% overall but PDF alone is 62.5%; three questions remain incomplete",
+    "Historical multilingual comparison used parser/pipeline 3; current code requires a new reviewed comparison"
   ],
   "smoke_test": {
     "real_services": true,
@@ -34,12 +35,20 @@
   "operational_reports": {
     "demo": "evaluations/v3/local_demo_observations.json",
     "boundary": "evaluations/v3/local_boundary_observations.json",
-    "models": "evaluations/v3/local_model_comparison.json"
+    "models": "evaluations/v3/local_model_comparison.json",
+    "context4": "evaluations/v3/local_context_observations.json",
+    "source_backed": "evaluations/v3/business/comparison.json"
   },
   "operational_runs": {
     "demo": 120,
     "boundary": 192,
-    "multilingual_boundary": 192
+    "multilingual_boundary": 192,
+    "context4_boundary": 192,
+    "source_backed_before": 29,
+    "source_backed_deployed": 29
   },
-  "operational_model_comparison_completed": true
+  "operational_model_comparison_completed": true,
+  "current_pipeline_schema": 4,
+  "source_backed_questions": 29,
+  "real_customer_documents": false
 }

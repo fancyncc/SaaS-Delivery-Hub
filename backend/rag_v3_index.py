@@ -203,6 +203,13 @@ async def index_document(session, source):
                     identifiers=exact_terms(text),
                 )
             )
+    from backend.rag_v3_context import identity_contexts
+
+    contexts = identity_contexts(index_nodes, parsed.nodes)
+    for stored in nodes:
+        refs = contexts.get(stored.structure["id"])
+        if refs:
+            stored.structure["identity_nodes"] = [source.id + ":" + ref for ref in refs]
     if not units:
         raise HTTPException(422, "无可索引的正文单元")
     def same_source_position(left, right):

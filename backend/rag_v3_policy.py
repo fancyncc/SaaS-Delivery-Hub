@@ -2,7 +2,7 @@
 import re
 from dataclasses import dataclass
 
-PIPELINE_SCHEMA = 3
+PIPELINE_SCHEMA = 4
 
 
 def retrieval_question(question):
@@ -62,6 +62,8 @@ def structural_relation(core, other, *, enumeration=False):
         return None
     if core.get('node_id') and core['node_id'] == other.get('node_id'):
         return 'node_parts'
+    if other.get('node_id') in core.get('identity_nodes', []):
+        return 'object_identity'
     if enumeration and core['kind'] == other['kind'] == 'json_value' and core.get('parent') is not None and core['parent'] == other.get('parent'):
         return 'enumeration'
     if core.get('record') and core['record'] == other.get('record'):

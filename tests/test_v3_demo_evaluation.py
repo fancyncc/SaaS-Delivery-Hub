@@ -53,6 +53,49 @@ def test_boundary_annotations_require_source_key_and_protected_conditions():
     assert count_facts(case, [{"origin_id": "gold", "text": "conditions: Stop before inspection"}], "gold") == 1
 
 
+def test_pdf_fact_credit_requires_annotated_page_and_preserves_numbers():
+    case = {"necessary_facts": ["at least 80 % coverage"], "source_keys": [], "required_page": 12}
+    correct = {"origin_id": "gold", "text": "at\nleast 80 % coverage", "location": {"page": 12}}
+    assert count_facts(case, [correct], "gold") == 1
+    assert count_facts(case, [{**correct, "location": {"page": 15}}], "gold") == 0
+    assert count_facts(case, [{**correct, "origin_id": "other"}], "gold") == 0
+    assert not contains_fact("at least 800 % coverage", "80 %")
+
+
+def test_business_source_checksums_and_draft_labels_are_explicit():
+    import hashlib
+    import json
+    from pathlib import Path
+
+    root = Path("evaluations/v3/business")
+    registry = json.loads((root / "sources.json").read_text(encoding="utf-8"))
+    assert not registry["independent_review_completed"] and not registry["customer_documents"]
+    assert len(registry["sources"]) == 5
+    for source in registry["sources"]:
+        assert hashlib.sha256((root / source["document"]).read_bytes()).hexdigest() == source["sha256"]
+    cases = [json.loads(line) for line in (root / "cases.jsonl").read_text(encoding="utf-8").splitlines()]
+    assert len(cases) == 29 and sum(c["kind"] == "no_answer" for c in cases) == 5
+    assert all(c["review_status"] == "agent_draft" and c["split"] == "development" for c in cases)
+
+
+def test_business_comparison_rejects_invalid_experiment_and_changed_budget():
+    from copy import deepcopy
+
+    from scripts.summarize_v3_business_comparison import compare
+
+    before = {"complete": True, "test_data_cleaned": True, "cases_sha256": "frozen",
+              "sources": [], "identity": {k: "pinned" for k in (
+                  "embedding", "embedding_revision", "reranker", "reranker_revision", "embedding_dimensions")},
+              "rows": [{"id": "a", "budget": 1200, "necessary_total": 1}]}
+    invalid = {**before, "valid_comparison": False}
+    with pytest.raises(ValueError, match="valid runs"):
+        compare(before, invalid)
+    changed = deepcopy(before)
+    changed["rows"][0]["budget"] = 1800
+    with pytest.raises(ValueError, match="budgets"):
+        compare(before, changed)
+
+
 async def test_boundary_cleanup_cannot_delete_other_search_sources(monkeypatch):
     requests = []
 

@@ -1,0 +1,877 @@
+{
+  "generated_at": "2026-09-27T10:45:11.768828+00:00",
+  "release_approved": false,
+  "complete": true,
+  "scope": "synthetic operational observations; not calibrated locked validation or paired model comparison",
+  "independent_review_completed": false,
+  "baseline_measured": false,
+  "identity": {
+    "embedding": "BAAI/bge-small-zh-v1.5",
+    "embedding_revision": "7999e1d3359715c523056ef9478215996d62a620",
+    "reranker": "BAAI/bge-reranker-base",
+    "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+    "embedding_dimensions": 512,
+    "embedding_max_length": 512,
+    "query_style": "prefix",
+    "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+    "reranker_max_length": 256,
+    "reranker_max_windows": 32,
+    "feature_schema": 2,
+    "parser_schema": 4
+  },
+  "pipeline_schema": 4,
+  "relevance_mode": "rules",
+  "cases_sha256": "2be6254c52bcb2643567a96483ee6c587845c959950d089e350ee5016fd05d22",
+  "test_data_cleaned": true,
+  "metrics": {
+    "observations": 192,
+    "required_source_spans": 318,
+    "candidate_span_recall": 0.9937106918238994,
+    "selected_span_coverage": 0.6226415094339622,
+    "noanswer_cases": 48,
+    "noanswer_returned_evidence": 0,
+    "permission_leaks": 0,
+    "citation_errors": 0,
+    "budget_violations": 0,
+    "warm_latency_p95_ms": 3461.01,
+    "statuses": {
+      "budget_limited": 63,
+      "evidence_found": 40,
+      "insufficient_relevance": 89
+    }
+  },
+  "per_format": {
+    "md": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.6190476190476191,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 3334.21,
+      "statuses": {
+        "budget_limited": 12,
+        "evidence_found": 3,
+        "insufficient_relevance": 9
+      }
+    },
+    "txt": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 0.9523809523809523,
+      "selected_span_coverage": 0.9523809523809523,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 3153.25,
+      "statuses": {
+        "budget_limited": 12,
+        "evidence_found": 6,
+        "insufficient_relevance": 6
+      }
+    },
+    "docx": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.6190476190476191,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 2854.22,
+      "statuses": {
+        "budget_limited": 12,
+        "evidence_found": 3,
+        "insufficient_relevance": 9
+      }
+    },
+    "csv": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.42857142857142855,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 850.15,
+      "statuses": {
+        "budget_limited": 9,
+        "insufficient_relevance": 12,
+        "evidence_found": 3
+      }
+    },
+    "json": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.5238095238095238,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 3445.51,
+      "statuses": {
+        "budget_limited": 12,
+        "insufficient_relevance": 11,
+        "evidence_found": 1
+      }
+    },
+    "pdf": {
+      "observations": 24,
+      "required_source_spans": 36,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.7222222222222222,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 1095.34,
+      "statuses": {
+        "evidence_found": 11,
+        "insufficient_relevance": 13
+      }
+    },
+    "pptx": {
+      "observations": 24,
+      "required_source_spans": 36,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.8333333333333334,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 3435.93,
+      "statuses": {
+        "budget_limited": 6,
+        "evidence_found": 6,
+        "insufficient_relevance": 12
+      }
+    },
+    "xlsx": {
+      "observations": 24,
+      "required_source_spans": 36,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.2777777777777778,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 4433.4,
+      "statuses": {
+        "insufficient_relevance": 17,
+        "evidence_found": 7
+      }
+    }
+  },
+  "index_metrics": [
+    {
+      "document": "fixtures/inventory.md",
+      "parse_ms": 47.25,
+      "index_ms": 805.17,
+      "nodes": 6,
+      "units": 5,
+      "format": "md",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.md",
+      "parse_ms": 0.98,
+      "index_ms": 1109.98,
+      "nodes": 6,
+      "units": 5,
+      "format": "md",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.md",
+      "parse_ms": 0.74,
+      "index_ms": 1003.23,
+      "nodes": 6,
+      "units": 5,
+      "format": "md",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.md",
+      "parse_ms": 1.27,
+      "index_ms": 995.96,
+      "nodes": 6,
+      "units": 5,
+      "format": "md",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.md",
+      "parse_ms": 0.79,
+      "index_ms": 1001.95,
+      "nodes": 6,
+      "units": 5,
+      "format": "md",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.md",
+      "parse_ms": 0.73,
+      "index_ms": 997.12,
+      "nodes": 6,
+      "units": 5,
+      "format": "md",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.txt",
+      "parse_ms": 0.92,
+      "index_ms": 1101.15,
+      "nodes": 6,
+      "units": 6,
+      "format": "txt",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.txt",
+      "parse_ms": 0.42,
+      "index_ms": 1006.33,
+      "nodes": 6,
+      "units": 6,
+      "format": "txt",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.txt",
+      "parse_ms": 0.37,
+      "index_ms": 1005.91,
+      "nodes": 6,
+      "units": 6,
+      "format": "txt",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.txt",
+      "parse_ms": 0.38,
+      "index_ms": 1025.74,
+      "nodes": 6,
+      "units": 6,
+      "format": "txt",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.txt",
+      "parse_ms": 0.61,
+      "index_ms": 1002.29,
+      "nodes": 6,
+      "units": 6,
+      "format": "txt",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.txt",
+      "parse_ms": 0.39,
+      "index_ms": 999.18,
+      "nodes": 6,
+      "units": 6,
+      "format": "txt",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.docx",
+      "parse_ms": 4.18,
+      "index_ms": 838.71,
+      "nodes": 6,
+      "units": 5,
+      "format": "docx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.docx",
+      "parse_ms": 0.72,
+      "index_ms": 1005.98,
+      "nodes": 6,
+      "units": 5,
+      "format": "docx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.docx",
+      "parse_ms": 0.94,
+      "index_ms": 1000.11,
+      "nodes": 6,
+      "units": 5,
+      "format": "docx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.docx",
+      "parse_ms": 0.68,
+      "index_ms": 1004.28,
+      "nodes": 6,
+      "units": 5,
+      "format": "docx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.docx",
+      "parse_ms": 0.66,
+      "index_ms": 998.9,
+      "nodes": 6,
+      "units": 5,
+      "format": "docx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.docx",
+      "parse_ms": 0.66,
+      "index_ms": 1054.38,
+      "nodes": 6,
+      "units": 5,
+      "format": "docx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.csv",
+      "parse_ms": 0.44,
+      "index_ms": 980.83,
+      "nodes": 6,
+      "units": 1,
+      "format": "csv",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.csv",
+      "parse_ms": 0.43,
+      "index_ms": 998.96,
+      "nodes": 6,
+      "units": 1,
+      "format": "csv",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.csv",
+      "parse_ms": 0.47,
+      "index_ms": 996.29,
+      "nodes": 6,
+      "units": 1,
+      "format": "csv",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.csv",
+      "parse_ms": 0.37,
+      "index_ms": 999.62,
+      "nodes": 6,
+      "units": 1,
+      "format": "csv",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.csv",
+      "parse_ms": 0.34,
+      "index_ms": 1006.83,
+      "nodes": 6,
+      "units": 1,
+      "format": "csv",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.csv",
+      "parse_ms": 0.44,
+      "index_ms": 1000.68,
+      "nodes": 6,
+      "units": 1,
+      "format": "csv",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.json",
+      "parse_ms": 0.44,
+      "index_ms": 700.2,
+      "nodes": 7,
+      "units": 5,
+      "format": "json",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.json",
+      "parse_ms": 0.43,
+      "index_ms": 1004.17,
+      "nodes": 7,
+      "units": 5,
+      "format": "json",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.json",
+      "parse_ms": 0.44,
+      "index_ms": 997.77,
+      "nodes": 7,
+      "units": 5,
+      "format": "json",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.json",
+      "parse_ms": 0.5,
+      "index_ms": 997.1,
+      "nodes": 7,
+      "units": 5,
+      "format": "json",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.json",
+      "parse_ms": 0.61,
+      "index_ms": 995.22,
+      "nodes": 7,
+      "units": 5,
+      "format": "json",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.json",
+      "parse_ms": 0.53,
+      "index_ms": 998.17,
+      "nodes": 7,
+      "units": 5,
+      "format": "json",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.pdf",
+      "parse_ms": 632.38,
+      "index_ms": 410.22,
+      "nodes": 2,
+      "units": 2,
+      "format": "pdf",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.pdf",
+      "parse_ms": 565.73,
+      "index_ms": 443.21,
+      "nodes": 2,
+      "units": 2,
+      "format": "pdf",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.pdf",
+      "parse_ms": 524.6,
+      "index_ms": 507.52,
+      "nodes": 2,
+      "units": 2,
+      "format": "pdf",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.pdf",
+      "parse_ms": 532.62,
+      "index_ms": 465.21,
+      "nodes": 2,
+      "units": 2,
+      "format": "pdf",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.pdf",
+      "parse_ms": 513.89,
+      "index_ms": 497.59,
+      "nodes": 2,
+      "units": 2,
+      "format": "pdf",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.pdf",
+      "parse_ms": 504.69,
+      "index_ms": 489.1,
+      "nodes": 2,
+      "units": 2,
+      "format": "pdf",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.pptx",
+      "parse_ms": 667.28,
+      "index_ms": 432.48,
+      "nodes": 5,
+      "units": 5,
+      "format": "pptx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.pptx",
+      "parse_ms": 547.06,
+      "index_ms": 451.57,
+      "nodes": 5,
+      "units": 5,
+      "format": "pptx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.pptx",
+      "parse_ms": 551.79,
+      "index_ms": 445.5,
+      "nodes": 5,
+      "units": 5,
+      "format": "pptx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.pptx",
+      "parse_ms": 571.86,
+      "index_ms": 434.43,
+      "nodes": 5,
+      "units": 5,
+      "format": "pptx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.pptx",
+      "parse_ms": 545.38,
+      "index_ms": 470.93,
+      "nodes": 5,
+      "units": 5,
+      "format": "pptx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.pptx",
+      "parse_ms": 558.53,
+      "index_ms": 442.99,
+      "nodes": 5,
+      "units": 5,
+      "format": "pptx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/inventory.xlsx",
+      "parse_ms": 680.12,
+      "index_ms": 1265.95,
+      "nodes": 16,
+      "units": 5,
+      "format": "xlsx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/education.xlsx",
+      "parse_ms": 560.91,
+      "index_ms": 439.12,
+      "nodes": 16,
+      "units": 5,
+      "format": "xlsx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/facilities.xlsx",
+      "parse_ms": 630.52,
+      "index_ms": 366.02,
+      "nodes": 16,
+      "units": 5,
+      "format": "xlsx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/publishing.xlsx",
+      "parse_ms": 560.33,
+      "index_ms": 440.79,
+      "nodes": 16,
+      "units": 5,
+      "format": "xlsx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/events.xlsx",
+      "parse_ms": 1033.18,
+      "index_ms": 961.03,
+      "nodes": 16,
+      "units": 5,
+      "format": "xlsx",
+      "ocr_pages": 0
+    },
+    {
+      "document": "fixtures/software.xlsx",
+      "parse_ms": 642.53,
+      "index_ms": 355.39,
+      "nodes": 16,
+      "units": 5,
+      "format": "xlsx",
+      "ocr_pages": 0
+    }
+  ],
+  "raw_report": "data/evaluations/boundary-context4/boundary-1200.json",
+  "raw_report_sha256": "84e8d55fa9c30168235db615f94cd44e3e086c1ec1261d56d25299affc9a9348",
+  "historical_pipeline3_baseline": {
+    "generated_at": "2026-09-27T08:30:41.856228+00:00",
+    "identity": {
+      "embedding": "BAAI/bge-small-zh-v1.5",
+      "embedding_revision": "7999e1d3359715c523056ef9478215996d62a620",
+      "reranker": "BAAI/bge-reranker-base",
+      "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+      "embedding_dimensions": 512,
+      "embedding_max_length": 512,
+      "query_style": "prefix",
+      "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+      "reranker_max_length": 256,
+      "reranker_max_windows": 32,
+      "feature_schema": 2,
+      "parser_schema": 3
+    },
+    "cases_sha256": "2be6254c52bcb2643567a96483ee6c587845c959950d089e350ee5016fd05d22",
+    "metrics": {
+      "observations": 192,
+      "required_source_spans": 318,
+      "candidate_span_recall": 0.9937106918238994,
+      "selected_span_coverage": 0.21069182389937108,
+      "noanswer_cases": 48,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 2930.97,
+      "statuses": {
+        "insufficient_relevance": 152,
+        "evidence_found": 19,
+        "budget_limited": 21
+      }
+    },
+    "per_format": {
+      "md": {
+        "observations": 24,
+        "required_source_spans": 42,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.0,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 2142.12,
+        "statuses": {
+          "insufficient_relevance": 24
+        }
+      },
+      "txt": {
+        "observations": 24,
+        "required_source_spans": 42,
+        "candidate_span_recall": 0.9523809523809523,
+        "selected_span_coverage": 0.023809523809523808,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 2315.16,
+        "statuses": {
+          "insufficient_relevance": 23,
+          "evidence_found": 1
+        }
+      },
+      "docx": {
+        "observations": 24,
+        "required_source_spans": 42,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.0,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 2387.43,
+        "statuses": {
+          "insufficient_relevance": 24
+        }
+      },
+      "csv": {
+        "observations": 24,
+        "required_source_spans": 42,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.42857142857142855,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 889.61,
+        "statuses": {
+          "budget_limited": 9,
+          "insufficient_relevance": 12,
+          "evidence_found": 3
+        }
+      },
+      "json": {
+        "observations": 24,
+        "required_source_spans": 42,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.5238095238095238,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 3586.78,
+        "statuses": {
+          "budget_limited": 12,
+          "insufficient_relevance": 11,
+          "evidence_found": 1
+        }
+      },
+      "pdf": {
+        "observations": 24,
+        "required_source_spans": 36,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.7222222222222222,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 920.45,
+        "statuses": {
+          "evidence_found": 11,
+          "insufficient_relevance": 13
+        }
+      },
+      "pptx": {
+        "observations": 24,
+        "required_source_spans": 36,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.0,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 1855.43,
+        "statuses": {
+          "insufficient_relevance": 21,
+          "evidence_found": 3
+        }
+      },
+      "xlsx": {
+        "observations": 24,
+        "required_source_spans": 36,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.0,
+        "noanswer_cases": 6,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 1947.48,
+        "statuses": {
+          "insufficient_relevance": 24
+        }
+      }
+    }
+  },
+  "per_split": {
+    "calibration": {
+      "observations": 96,
+      "required_source_spans": 159,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.6415094339622641,
+      "noanswer_cases": 24,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 3673.76,
+      "statuses": {
+        "budget_limited": 33,
+        "evidence_found": 18,
+        "insufficient_relevance": 45
+      }
+    },
+    "validation": {
+      "observations": 96,
+      "required_source_spans": 159,
+      "candidate_span_recall": 0.9874213836477987,
+      "selected_span_coverage": 0.6037735849056604,
+      "noanswer_cases": 24,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 3435.93,
+      "statuses": {
+        "budget_limited": 30,
+        "insufficient_relevance": 44,
+        "evidence_found": 22
+      }
+    }
+  },
+  "observed_failures": {
+    "md": [
+      "education-md-1",
+      "publishing-md-1",
+      "events-md-1",
+      "software-md-1"
+    ],
+    "txt": [
+      "events-txt-2"
+    ],
+    "docx": [
+      "education-docx-1",
+      "publishing-docx-1",
+      "events-docx-1",
+      "software-docx-1"
+    ],
+    "csv": [
+      "inventory-csv-1",
+      "education-csv-1",
+      "facilities-csv-1",
+      "publishing-csv-1",
+      "events-csv-1",
+      "software-csv-1"
+    ],
+    "json": [
+      "inventory-json-1",
+      "education-json-1",
+      "facilities-json-1",
+      "publishing-json-1",
+      "software-json-1"
+    ],
+    "pdf": [
+      "inventory-pdf-2",
+      "education-pdf-1",
+      "education-pdf-2",
+      "facilities-pdf-2",
+      "publishing-pdf-2",
+      "events-pdf-2",
+      "software-pdf-2"
+    ],
+    "pptx": [
+      "inventory-pptx-2",
+      "education-pptx-2",
+      "facilities-pptx-2",
+      "publishing-pptx-2",
+      "events-pptx-2",
+      "software-pptx-2"
+    ],
+    "xlsx": [
+      "inventory-xlsx-0",
+      "inventory-xlsx-1",
+      "education-xlsx-0",
+      "education-xlsx-1",
+      "facilities-xlsx-0",
+      "facilities-xlsx-1",
+      "publishing-xlsx-0",
+      "publishing-xlsx-1",
+      "events-xlsx-0",
+      "software-xlsx-0",
+      "software-xlsx-1"
+    ]
+  }
+}

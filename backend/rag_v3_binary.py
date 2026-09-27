@@ -60,6 +60,38 @@ def _ocr_page(raw: bytes, index: int) -> str:
         document.close()
 
 
+def pdf_blocks(text):
+    """Original character slices at explicit blank lines, sections and bullets.
+
+    PDF text layers often omit blank paragraph separators. Treating a whole page
+    as one structural record forces unrelated sections into an atomic package.
+    Only visible textual markers create boundaries; wrapped lines stay intact.
+    """
+    marker = re.compile(r"^(?:\d+(?:\.\d+)+\s+[^\n]{1,90}|[•–]\s+[^\n]+)$")
+    starts = {0}
+    offset = 0
+    heading = ""
+    headings = {}
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if marker.fullmatch(stripped):
+            starts.add(offset)
+            if re.match(r"^\d+(?:\.\d+)+\s", stripped):
+                heading = stripped
+        if not stripped:
+            starts.add(offset + len(line))
+        headings[offset] = heading
+        offset += len(line)
+    bounds = sorted(starts | {len(text)})
+    for start, end in zip(bounds, bounds[1:], strict=False):
+        block = text[start:end]
+        if not block.strip():
+            continue
+        left = start + len(block) - len(block.lstrip())
+        right = end - len(block) + len(block.rstrip())
+        yield text[left:right], [left, right], headings.get(start, "")
+
+
 def parse_pdf(raw: bytes, add, result) -> None:
     from pypdf import PdfReader
 
@@ -91,9 +123,8 @@ def parse_pdf(raw: bytes, add, result) -> None:
                 result.warnings.append(f"第 {page_number} 页使用 OCR，识别内容请人工核对")
         elif has_images:
             result.warnings.append(f"第 {page_number} 页仅提取文字层，图片内容未识别")
-        for block_index, block in enumerate(re.split(r"\n\s*\n", text), 1):
-            if block.strip():
-                add("paragraph", block.strip(), {"page": page_number, "block": block_index})
+        for block_index, (block, chars, heading) in enumerate(pdf_blocks(text), 1):
+            add("paragraph", block, {"page": page_number, "block": block_index, "chars": chars}, heading=heading)
     if not result.nodes:
         raise HTTPException(422, "PDF 没有可检索文字")
 

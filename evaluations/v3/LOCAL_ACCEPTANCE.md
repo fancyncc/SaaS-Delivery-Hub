@@ -2,6 +2,8 @@
 
 范围为本机 Docker 和可重复的发布流程。功能部署已更新，正式检索质量验收尚未完成；`status.json` 中正式验收与校准策略发布标志仍为 `false`。
 
+后续首轮来源题库、解析/对象上下文改进与最新 Docker 发布见 [检索质量记录](business/RESULTS.md)。本页以下模型观测与备份为较早一次发布的历史记录；当前解析及证据流程已更新到版本 4。
+
 ## 本次完成
 
 - 恢复 PostgreSQL、Redis、OpenSearch、模型、API、Web、worker、indexer 和单实例 beat。API `/ready` 返回仓库 head `0029_task_review_workflow`；模型就绪并核对固定权重版本。两个 Celery 节点分别消费 `celery` 和 `indexing`。

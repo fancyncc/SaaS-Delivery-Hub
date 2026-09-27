@@ -7,11 +7,16 @@ async def assemble_evidence(relevant, budget, count, serialize, policy=None):
     selected, omitted, conflicts, consumed = [], [], [], set()
     seen, saved, prepared = {}, 0, []
     incomplete_targets = set()
+    available_nodes = {h.get('node_id') for h in relevant if h.get('evidence_role') != 'irrelevant'}
     for original in relevant:
         if original['id'] in consumed or original.get('evidence_role') == 'irrelevant':
             continue
         item = dict(original)
         item.setdefault('evidence_role', 'direct')
+        if not set(item.get('identity_nodes', [])).issubset(available_nodes):
+            original['disposition'] = 'missing_object_identity'
+            omitted.append(item['id'])
+            continue
         if item.get('location', {}).get('requires_all_parts'):
             members = [h for h in relevant if h['document_id'] == item['document_id'] and h.get('node_id') == item.get('node_id')]
             if len(members) != item['location']['parts'] or not item.get('complete_node_text'):
@@ -113,5 +118,7 @@ async def assemble_evidence(relevant, budget, count, serialize, policy=None):
     for item in selected:
         item.pop('complete_node_text', None)
         item.pop('context_anchor', None)
+        item.pop('identity_context', None)
+        item.pop('identity_nodes', None)
     evidence = '\n\n'.join(serialize(h) for h in selected)
     return selected, evidence, (await count([evidence]))[0], saved, omitted, conflicts

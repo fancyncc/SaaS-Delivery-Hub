@@ -39,7 +39,7 @@ def model_identity():
         "reranker_max_length": s.reranker_max_length,
         "reranker_max_windows": s.reranker_max_windows,
         "feature_schema": 2,
-        "parser_schema": 3,
+        "parser_schema": 4,
     }
 
 

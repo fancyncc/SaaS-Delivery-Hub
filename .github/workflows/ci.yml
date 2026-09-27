@@ -14,7 +14,7 @@ jobs:
           python-version: '3.11'
           cache: pip
       - run: python -m pip install -e '.[dev]'
-      - run: python -m ruff check backend tests scripts/evaluate_v3_demo.py scripts/record_v3_boundary_runs.py scripts/download_rag_models.py
+      - run: python -m ruff check backend tests scripts/evaluate_v3_demo.py scripts/record_v3_boundary_runs.py scripts/download_rag_models.py scripts/prepare_v3_business_corpus.py scripts/record_v3_business_runs.py scripts/summarize_v3_business_comparison.py
       - run: python -m pytest -q
 
   frontend:
@@ -77,7 +77,7 @@ jobs:
         run: |
           $parseErrors = $null
           $parseTokens = $null
-          foreach ($script in @('scripts/record_local_v3_evaluation.ps1','scripts/compare_local_v3_models.ps1')) {
+          foreach ($script in @('scripts/record_local_v3_evaluation.ps1','scripts/record_local_v3_business.ps1','scripts/compare_local_v3_models.ps1')) {
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $script), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
             if ($parseErrors) { throw ($parseErrors -join "`n") }
           }

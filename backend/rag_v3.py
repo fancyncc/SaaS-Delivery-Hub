@@ -10,6 +10,7 @@ from sqlalchemy.orm import aliased, load_only
 from backend.config import get_settings
 from backend.knowledge import lexemes
 from backend.models import KnowledgeDocument
+from backend.rag_v3_context import ranking_text
 from backend.rag_v3_index import exact_terms, identity
 from backend.rag_v3_models import V3Document, V3Node, V3Unit
 from backend.rag_v3_policy import (
@@ -96,8 +97,7 @@ async def rerank(question, hits):
             [
                 {
                     **h,
-                    "text": (h["context_anchor"] + "\n" if h.get("context_anchor") else "")
-                    + h["text"],
+                    "text": ranking_text(h),
                 }
                 for h in batch
             ],
@@ -216,6 +216,8 @@ async def supplement(session, tenant, selected, documents, policy=None):
         if item["document_id"] not in documents:
             continue
         relations = [V3Unit.node_id == item["node_id"]]
+        if item.get("identity_nodes"):
+            relations.append(V3Unit.node_id.in_(item["identity_nodes"]))
         if item.get("record"):
             relations.append(V3Unit.record == item["record"])
         # Only explicit references; parent titles are already included in each unit.
@@ -294,6 +296,31 @@ async def assemble(relevant, budget, policy=None):
     return await assemble_evidence(relevant, budget, counts, serialize, policy)
 
 
+async def attach_identity_context(session, tenant, candidates, documents):
+    if not candidates:
+        return
+    nodes = list(await session.scalars(select(V3Node).where(
+        V3Node.tenant_id == tenant, V3Node.document_id.in_(documents),
+        V3Node.id.in_([h["node_id"] for h in candidates]),
+    )))
+    by_id = {n.id: n for n in nodes}
+    refs = {ref for n in nodes for ref in n.structure.get("identity_nodes", [])}
+    if not refs:
+        return
+    anchors = {n.id: n for n in await session.scalars(select(V3Node).where(
+        V3Node.tenant_id == tenant, V3Node.document_id.in_(documents), V3Node.id.in_(refs),
+    ))}
+    for h in candidates:
+        node = by_id.get(h["node_id"])
+        if not node or node.document_id != h["document_id"]:
+            continue
+        allowed = [anchors[ref] for ref in node.structure.get("identity_nodes", [])
+                   if ref in anchors and anchors[ref].document_id == h["document_id"]
+                   and len(anchors[ref].structure["text"]) <= 240]
+        h["identity_nodes"] = [n.id for n in allowed]
+        h["identity_context"] = "\n".join(n.structure["text"] for n in allowed)
+
+
 async def inspect(session, tenant, question, projects, budget):
     from backend.config import get_settings
 
@@ -357,6 +384,7 @@ async def run(session, tenant, question, projects, budget, config):
                 visited.add(branch[index]["id"])
                 candidates.append(candidates_by_id[branch[index]["id"]])
     ranking_question = retrieval_question(question)
+    await attach_identity_context(session, tenant, candidates, documents)
     ranked = await rerank(ranking_question, candidates[: policy.rerank_limit])
     best = ranked[0]["rerank_score"] if ranked else 0
     direct, relevant = [], []
@@ -403,7 +431,7 @@ async def run(session, tenant, question, projects, budget, config):
             for core in relevant
             if core.get("evidence_role") == "direct"
             and structural_relation(core, h, enumeration=policy.enumeration)
-            in {"record", "node_parts", "explicit_reference"}
+            in {"record", "node_parts", "explicit_reference", "object_identity"}
         ]
         h["supports"] = list(set(h.get("supports", [])) | set(anchors))
     node_ids = {h["node_id"] for h in relevant if h.get("location", {}).get("requires_all_parts")}

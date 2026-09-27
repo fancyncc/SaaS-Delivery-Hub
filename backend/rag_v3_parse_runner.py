@@ -3,6 +3,7 @@
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -16,6 +17,7 @@ def parse_isolated(filename: str, raw: bytes, *, csv_header: bool = True) -> Par
             [sys.executable, "-m", "backend.rag_v3_parse_runner", filename, str(int(csv_header))],
             input=raw,
             capture_output=True,
+            cwd=Path(__file__).resolve().parents[1],
             timeout=timeout,
             check=False,
         )
@@ -48,7 +50,8 @@ def main() -> None:
         payload = result.dump()
     except HTTPException as exc:
         payload = {"status": exc.status_code, "error": str(exc.detail)}
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False))
+    # The parent reads JSON bytes as UTF-8, regardless of Windows console locale.
+    sys.stdout.buffer.write(json.dumps(payload, ensure_ascii=False).encode("utf-8"))
 
 
 if __name__ == "__main__":

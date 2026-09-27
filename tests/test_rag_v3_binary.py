@@ -17,6 +17,7 @@ from backend.config import get_settings
 from backend.db import SessionLocal
 from backend.models import KnowledgeDocument
 from backend.rag_v3 import visible_documents
+from backend.rag_v3_binary import pdf_blocks
 from backend.rag_v3_index import index_document
 from backend.rag_v3_models import V3Document, V3Unit
 from backend.rag_v3_parse import parse
@@ -48,6 +49,28 @@ def test_pdf_pages_are_distinct_and_isolated():
     assert "90" in parsed.nodes[1].text and "80" not in parsed.nodes[1].text
     isolated = parse_isolated("limits.pdf", raw)
     assert isolated.dump() == parsed.dump()
+
+
+def test_pdf_explicit_sections_and_bullets_preserve_wrapped_source():
+    text = "Intro\n• Must verify the\noriginal source.\n• Never omit exceptions.\n2.1 Threat Modeling\nRepeat during development.\n2.2 Testing\nAt least 80 % coverage."
+    blocks = list(pdf_blocks(text))
+    assert len(blocks) == 5
+    assert blocks[1][0] == "• Must verify the\noriginal source."
+    assert blocks[3][2] == "2.1 Threat Modeling" and blocks[4][2] == "2.2 Testing"
+    assert all(text[span[0]:span[1]] == block for block, span, _ in blocks)
+    assert "".join(block.replace("\n", "") for block, _, _ in blocks) == text.replace("\n", "")
+
+
+def test_isolated_parser_protocol_is_utf8_under_windows_locale(monkeypatch):
+    monkeypatch.setenv("PYTHONIOENCODING", "gbk")
+    parsed = parse_isolated("policy.txt", "编号：A-1\n\n不得删除。".encode())
+    assert parsed.nodes[-1].text == "不得删除。"
+
+
+def test_isolated_parser_import_is_independent_of_callers_directory(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    parsed = parse_isolated("policy.txt", b"Do not execute external links.")
+    assert parsed.nodes[0].text == "Do not execute external links."
 
 
 def test_pdf_scanned_page_is_not_silently_omitted(monkeypatch):

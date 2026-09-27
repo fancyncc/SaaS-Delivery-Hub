@@ -1,3 +1,6 @@
 *.pdf binary
 *.pptx binary
 *.xlsx binary
+# Frozen source snapshots and labels retain their measured bytes on every host.
+evaluations/v3/business/sources/*.md -text whitespace=trailing-space,space-before-tab,cr-at-eol
+evaluations/v3/business/cases.jsonl -text whitespace=trailing-space,space-before-tab,cr-at-eol

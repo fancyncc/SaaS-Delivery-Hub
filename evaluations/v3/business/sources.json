@@ -1,0 +1,47 @@
+{
+  "independent_review_completed": false,
+  "customer_documents": false,
+  "scope": "project operation and public software verification; development corpus",
+  "sources": [
+    {
+      "document": "sources/RAG_BINARY_DOCUMENTS.md",
+      "sha256": "fb7497373be5dcde3a28de79ba7383931cced9fcb0f4e51d1061fe543450a123",
+      "source_kind": "maintained_project_document",
+      "source": "docs/RAG_BINARY_DOCUMENTS.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/CONTEXT_MEMORY.md",
+      "sha256": "9d0d3c1c69e5bcaec07ce7c756b6b41e4f923d1eb7281b1d6b73b933db830331",
+      "source_kind": "maintained_project_document",
+      "source": "docs/CONTEXT_MEMORY.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/CHAT_AGENT.md",
+      "sha256": "9bee6552b0fc9db75d6b1722ba57dc5c92f328193d65637f200e0f639dfc2272",
+      "source_kind": "maintained_project_document",
+      "source": "docs/CHAT_AGENT.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/PREPRODUCTION_RUNBOOK.md",
+      "sha256": "8a4b024a012e64833f3a77405b92d0dea418631f69ff0380de5f718186b9975c",
+      "source_kind": "maintained_project_document",
+      "source": "docs/PREPRODUCTION_RUNBOOK.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/NIST.IR.8397.pdf",
+      "sha256": "cadab12c1f7b1a6a8f844d19180381211e1c29d05554bd9efb277442d8fd983d",
+      "source_kind": "public_government_publication",
+      "source": "https://nvlpubs.nist.gov/nistpubs/ir/2021/NIST.IR.8397.pdf",
+      "revision": null,
+      "license": "US government work"
+    }
+  ]
+}
