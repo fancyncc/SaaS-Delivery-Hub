@@ -4,12 +4,22 @@
   "independent_review_completed": false,
   "model_comparison_completed": false,
   "synthetic_boundary_questions": 192,
-  "formats": ["md", "txt", "docx", "csv", "json", "pdf", "pptx", "xlsx"],
+  "formats": [
+    "md",
+    "txt",
+    "docx",
+    "csv",
+    "json",
+    "pdf",
+    "pptx",
+    "xlsx"
+  ],
   "failures": [
-    "Independent review and additional diverse source annotations are pending",
-    "Two pinned model combinations have not completed paired evaluation",
+    "Independent review and additional diverse real-source annotations are pending",
+    "Calibrated paired older-baseline and locked validation are not complete",
     "Relevance classifier has not been trained on independently reviewed calibration labels",
-    "Locked validation coverage, no-answer errors and warm latency gates have not been measured"
+    "Current rules-mode synthetic selected-span coverage is 21.1%; every format is below 90%",
+    "Multilingual rules-mode selected-span coverage is 30.8%; only JSON reaches 90%"
   ],
   "smoke_test": {
     "real_services": true,
@@ -19,5 +29,17 @@
     "budget": 600,
     "quality_evaluation": false,
     "test_data_cleaned": true
-  }
+  },
+  "operational_evaluation_completed": true,
+  "operational_reports": {
+    "demo": "evaluations/v3/local_demo_observations.json",
+    "boundary": "evaluations/v3/local_boundary_observations.json",
+    "models": "evaluations/v3/local_model_comparison.json"
+  },
+  "operational_runs": {
+    "demo": 120,
+    "boundary": 192,
+    "multilingual_boundary": 192
+  },
+  "operational_model_comparison_completed": true
 }

@@ -4,6 +4,8 @@
 
 知识文档可上传 PDF（含扫描页 OCR）、PPTX、XLSX 及原有格式，经 V3 后台索引后供 RAG 查验、聊天和 Agent 检索。格式范围、限制和失败处理见 [PDF 与 Office 知识文档](docs/RAG_BINARY_DOCUMENTS.md)。
 
+本机功能部署和正式检索质量验收分别记录。2026-09-27 已补充真实模型观测和浏览器验收；合成边界题的最终证据覆盖率尚未达标，校准策略仍未获准启用。结果及剩余事项见 [本机验收记录](evaluations/v3/LOCAL_ACCEPTANCE.md)。
+
 上下文改进已实现统一 token 预算、结构化会话状态、滚动摘要、私有历史混合召回及分作用域记忆。功能按 `CHAT_CONTEXT_MODE`、`CHAT_HISTORY_ENABLED`、`CHAT_MEMORY_ITEMS_ENABLED` 和 `CHAT_MEMORY_CANDIDATES_ENABLED` 分阶段启用；仓库 `.env.example` 默认关闭，本机 Docker 验收环境已依次通过 `shadow`、`on`、历史与记忆功能，当前开启这些功能。候选记忆的自动提取仍由用户自行选择开启，默认关闭。验收顺序见 [上下文与记忆说明](docs/CONTEXT_MEMORY.md)。
 
 聊天现支持按需问题重写/澄清、最多两轮原生工具调用、MCP 只读接口及 SSE 流式回答。真实模式下，企业与项目知识文档使用 V3 最终证据；对话附件、项目需求与交付物继续走各自授权检索路径。本地部署、API 协议和验收边界见 [聊天 Agent 说明](docs/CHAT_AGENT.md)。

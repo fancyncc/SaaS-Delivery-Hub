@@ -1,0 +1,15 @@
+services:
+  retrieval-evaluation:
+    extends:
+      file: docker-compose.yml
+      service: retrieval
+    profiles: [v3-evaluation]
+    restart: "no"
+    env_file: config/retrieval.v3-multilingual.env.example
+    mem_limit: 5g
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8010/health/ready', timeout=10)"]
+      interval: 15s
+      timeout: 15s
+      retries: 20
+      start_period: 300s

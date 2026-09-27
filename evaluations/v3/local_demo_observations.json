@@ -1,0 +1,131 @@
+{
+  "generated_at": "2026-09-27T08:23:51.614348+00:00",
+  "release_approved": false,
+  "annotation_review": "agent-authored demo spans; independent review pending",
+  "scope": "read-only deployed retrieval layer, authored XL-107 demo; not a formal locked quality/model comparison",
+  "identity": {
+    "embedding": "BAAI/bge-small-zh-v1.5",
+    "embedding_revision": "7999e1d3359715c523056ef9478215996d62a620",
+    "reranker": "BAAI/bge-reranker-base",
+    "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+    "embedding_dimensions": 512,
+    "embedding_max_length": 512,
+    "query_style": "prefix",
+    "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+    "reranker_max_length": 256,
+    "reranker_max_windows": 32,
+    "feature_schema": 2,
+    "parser_schema": 3
+  },
+  "case_count": 40,
+  "dataset_sha256": "a9cf92f3ab1befae640375a8a96fec8f92921e8b6dcebb5d86d1b184732f7be5",
+  "metrics": {
+    "observations": 120,
+    "required_source_spans": 162,
+    "candidate_span_recall": 1.0,
+    "selected_span_coverage": 0.9814814814814815,
+    "noanswer_cases": 12,
+    "noanswer_returned_evidence": 3,
+    "permission_leaks": 0,
+    "citation_errors": 0,
+    "budget_violations": 0,
+    "warm_latency_p95_ms": 14060.86,
+    "statuses": {
+      "evidence_found": 73,
+      "budget_limited": 38,
+      "insufficient_relevance": 9
+    }
+  },
+  "per_budget": {
+    "600": {
+      "observations": 40,
+      "required_source_spans": 54,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.9444444444444444,
+      "noanswer_cases": 4,
+      "noanswer_returned_evidence": 1,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 14060.86,
+      "statuses": {
+        "evidence_found": 15,
+        "budget_limited": 22,
+        "insufficient_relevance": 3
+      }
+    },
+    "1200": {
+      "observations": 40,
+      "required_source_spans": 54,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 4,
+      "noanswer_returned_evidence": 1,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 16182.44,
+      "statuses": {
+        "evidence_found": 26,
+        "budget_limited": 11,
+        "insufficient_relevance": 3
+      }
+    },
+    "1800": {
+      "observations": 40,
+      "required_source_spans": 54,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 4,
+      "noanswer_returned_evidence": 1,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 10756.07,
+      "statuses": {
+        "evidence_found": 32,
+        "budget_limited": 5,
+        "insufficient_relevance": 3
+      }
+    }
+  },
+  "complete": true,
+  "raw_report": "data/evaluations/20260927-demo/report.json",
+  "unmatched_noanswer": [
+    {
+      "id": "inspection-38",
+      "budget": 600,
+      "title": "XL-107 测试计划与 UAT 验收",
+      "heading": "XL-107 测试计划与 UAT 验收 / 迁移与知识查验",
+      "note": "Returned source explicitly states real keys are not provided; independent reviewer must assess the no-answer annotation."
+    },
+    {
+      "id": "inspection-38",
+      "budget": 1200,
+      "title": "XL-107 测试计划与 UAT 验收",
+      "heading": "XL-107 测试计划与 UAT 验收 / 迁移与知识查验",
+      "note": "Returned source explicitly states real keys are not provided; independent reviewer must assess the no-answer annotation."
+    },
+    {
+      "id": "inspection-38",
+      "budget": 1800,
+      "title": "XL-107 测试计划与 UAT 验收",
+      "heading": "XL-107 测试计划与 UAT 验收 / 迁移与知识查验",
+      "note": "Returned source explicitly states real keys are not provided; independent reviewer must assess the no-answer annotation."
+    }
+  ],
+  "missing_spans": [
+    {
+      "id": "inspection-15",
+      "budget": 600,
+      "covered": 0,
+      "necessary": 1
+    },
+    {
+      "id": "inspection-19",
+      "budget": 600,
+      "covered": 2,
+      "necessary": 4
+    }
+  ]
+}

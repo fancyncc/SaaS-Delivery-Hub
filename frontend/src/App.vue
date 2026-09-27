@@ -16,7 +16,7 @@ async function logout() { await auth.logout(); await router.push('/login') }
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell" :class="{ 'chat-shell': route.name === 'chat' }">
     <header class="app-header">
       <router-link class="brand" :to="auth.isPlatform ? '/platform' : '/app'">
         <span class="brand-mark">A</span>

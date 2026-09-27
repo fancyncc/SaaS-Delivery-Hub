@@ -1,8 +1,10 @@
 import asyncio
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import httpx
 import pytest
@@ -41,6 +43,25 @@ async def test_browser_80_member_delivery(client):
                 await page.wait_for_url(base + ("/platform" if platform else "/app"))
                 return page
             manager = await login("company-admin@example.com", "CompanyAdmin123")
+            # Collaboration lives in details; shared/reloaded URLs retain the tab.
+            await expect(manager.get_by_role("button", name=re.compile("项目文档|协作任务"))).to_have_count(0)
+            await manager.get_by_role("link", name="查看详情", exact=True).click()
+            await expect(manager.locator(".project-detail-navigation")).to_be_visible()
+            await manager.get_by_role("button", name=re.compile("项目文档")).click()
+            await manager.wait_for_url("**tab=documents")
+            documents_url = manager.url
+            await manager.reload()
+            await expect(manager.get_by_role("heading", name=re.compile("文档资料"))).to_be_visible()
+            await manager.get_by_role("button", name=re.compile("协作任务")).click()
+            await manager.wait_for_url("**tab=tasks")
+            await manager.reload()
+            await expect(manager.get_by_role("heading", name="协作任务", exact=True)).to_be_visible()
+            await manager.goto(documents_url)
+            await expect(manager.get_by_role("heading", name=re.compile("文档资料"))).to_be_visible()
+            await manager.get_by_role("button", name="项目概览", exact=True).click()
+            await expect(manager.get_by_role("heading", name="基本信息", exact=True)).to_be_visible()
+            assert "tab" not in parse_qs(urlsplit(manager.url).query)
+            await manager.goto(base + "/app")
             artifact_dir = Path("tests/artifacts")
             artifact_dir.mkdir(exist_ok=True)
             await manager.get_by_role("button", name="启动 Agent", exact=True).click()
@@ -61,6 +82,7 @@ async def test_browser_80_member_delivery(client):
             await consultant.get_by_label("成员 CSV 内容").fill(csv_text)
             await consultant.get_by_role("button", name="校验并提交审批").click()
             await expect(consultant.get_by_label("成员 CSV 内容")).to_have_count(0)
+            await expect(consultant.locator('.run-status strong')).to_have_text('数据导入审批', timeout=15000)
             await approver.reload()
             await approver.get_by_role("button", name="批准并继续", exact=True).click()
             await expect(approver.get_by_text("审批已通过，Agent 已继续执行。", exact=True)).to_be_visible()

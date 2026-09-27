@@ -1,14 +1,14 @@
 {
   "embedding_mode": "online",
   "embedding_model": "BAAI/bge-m3",
-  "embedding_base_url": "http://127.0.0.1:8011/v1",
-  "embedding_revision": "REPLACE_WITH_VERIFIED_40_CHARACTER_WEIGHT_COMMIT",
+  "embedding_base_url": "http://retrieval-evaluation:8010/v1",
+  "embedding_revision": "5617a9f61b028005a4858fdac845db406aefb181",
   "embedding_dimensions": 1024,
   "embedding_query_style": "none",
   "embedding_query_instruction": "",
   "reranker_mode": "online",
   "reranker_model": "BAAI/bge-reranker-v2-m3",
-  "reranker_base_url": "http://127.0.0.1:8011/v1",
-  "reranker_revision": "REPLACE_WITH_VERIFIED_40_CHARACTER_WEIGHT_COMMIT",
+  "reranker_base_url": "http://retrieval-evaluation:8010/v1",
+  "reranker_revision": "953dc6f6f85a1b2dbfca4c34a2796e7dde08d41e",
   "reranker_max_length": 512
 }
