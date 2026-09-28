@@ -48,7 +48,8 @@ def test_attribute_questions_expand_field_intent_without_changing_original():
     assert policy.queries[0] == question
     assert retrieval_question(question) in policy.queries
     assert '字段' in retrieval_question(question)
-    assert retrieval_question('首次响应时限是多少') == '首次响应时限是多少'
+    deadline = retrieval_question('首次响应时限是多少')
+    assert deadline.startswith('首次响应时限是多少') and 'acknowledgement' in deadline
 
 
 def test_cross_language_expansion_requires_every_triggered_literal_concept():
@@ -178,6 +179,68 @@ async def test_structural_recall_repairs_a_missed_label_inside_exact_object_scop
             set(),
             query_policy(unknown),
         ) == []
+
+
+async def test_answerability_gate_rejects_topic_only_and_keeps_cross_language_support(monkeypatch):
+    monkeypatch.setattr('backend.rag_v3_index.model_counts', tokens)
+    monkeypatch.setattr(pipeline, 'token_counts', tokens)
+    async with SessionLocal() as session:
+        tenant = await session.scalar(select(Tenant).where(Tenant.slug == 'legacy-demo'))
+        doc = KnowledgeDocument(
+            tenant_id=tenant.id,
+            title='Backup policy',
+            version=1,
+            module='test',
+            source='backup.md',
+            license='test',
+            body='# 备份要求\n\n灾备数据库每天执行一次备份。\n\n# 归档位置\n\n备份归档保存在华东 2 区域。',
+        )
+        session.add(doc)
+        await session.flush()
+        source = await register(session, doc)
+        await index_document(session, source)
+        from backend.rag_v3_models import V3Unit
+
+        rows = list(await session.scalars(
+            select(V3Unit).where(V3Unit.document_id == source.id).order_by(V3Unit.ordinal)
+        ))
+        generic = next(row for row in rows if '每天执行' in row.text)
+        regional = next(row for row in rows if '华东' in row.text)
+
+        async def recall(_session, _tenant, query, _documents, _policy):
+            unit = generic if '厂商' in query or 'vendor' in query else regional
+            return [pipeline.hit(unit, doc, score=1)], {'bm25': 1, 'vector': 1, 'exact': 0}
+
+        async def rerank(_question, hits):
+            return [
+                {**item, 'rerank_score': .99 if item['id'] == generic.id else .05}
+                for item in hits
+            ]
+
+        monkeypatch.setattr(pipeline, 'recall', recall)
+        monkeypatch.setattr(pipeline, 'rerank', rerank)
+        config = {
+            'relevance_mode': 'rules',
+            'min_rerank_score': .5,
+            'same_language_min_evidence_score': .5,
+            'en_to_zh_min_evidence_score': .35,
+            'zh_to_en_min_evidence_score': .35,
+            'mixed_language_min_evidence_score': .45,
+        }
+        rejected = await pipeline.run(
+            session, tenant.id, '灾备数据库要求使用哪个厂商的产品？', [], 600, config
+        )
+        assert not rejected['chunks'] and rejected['result_status'] == 'insufficient'
+        assert rejected['diagnostics']['candidates'][0]['answerability']['label'] == 'TOPIC_ONLY'
+        assert rejected['answerability']['missing_atoms'] == ['brand']
+
+        supported = await pipeline.run(
+            session, tenant.id, 'Which region stores the backup archives?', [], 600, config
+        )
+        assert len(supported['chunks']) == 1 and supported['result_status'] == 'evidence_found'
+        assert supported['chunks'][0]['answerability']['label'] == 'SUPPORT'
+        assert supported['chunks'][0]['rerank_score'] == .05
+        assert supported['diagnostics']['timings_ms']['total'] >= 0
 
 
 async def test_rule_and_exception_are_atomic(monkeypatch):

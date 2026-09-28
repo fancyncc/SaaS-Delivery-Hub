@@ -6,6 +6,7 @@ on:
 
 jobs:
   backend:
+    needs: frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,6 +14,10 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: frontend/dist
       - run: python -m pip install -e '.[dev]'
       - run: python -m ruff check .
       - run: python -m pytest -q

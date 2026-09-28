@@ -73,7 +73,7 @@ async def assemble_evidence(relevant, budget, count, serialize, policy=None):
             packages.append(package)
     packages.sort(key=lambda p: (
         -int(bool(p[0].get('rule_relevance'))),
-        -p[0].get('rerank_score', 0),
+        -p[0].get('evidence_score', p[0].get('rerank_score', 0)),
         p[0]['id'],
     ))
     # Round-robin explicit comparison branches (or source/heading scopes).
@@ -98,7 +98,7 @@ async def assemble_evidence(relevant, budget, count, serialize, policy=None):
             packages.sort(key=lambda p: (
                 -len(fact_atoms(p[0])-covered)/max(1, len(fact_atoms(p[0]))),
                 -int(bool(p[0].get('rule_relevance'))),
-                -p[0].get('rerank_score', 0), p[0]['id']))
+                -p[0].get('evidence_score', p[0].get('rerank_score', 0)), p[0]['id']))
         package = packages.pop(0)
         extra = [h for h in package if h['id'] not in selected_ids]
         packed = '\n\n'.join(serialize(h) for h in [*selected, *extra])

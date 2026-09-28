@@ -19,6 +19,14 @@ FEATURES = (
     "structured",
     "phrase",
     "condition_terms",
+    "attribute_coverage",
+    "topic_coverage",
+    "scope_coverage",
+    "language_bridge",
+    "en_to_zh",
+    "zh_to_en",
+    "answerability_gated",
+    "topic_only",
 )
 RELEASE_FORMATS = ("md", "txt", "docx", "csv", "json", "pdf", "pptx", "xlsx")
 
@@ -38,7 +46,7 @@ def model_identity():
         "query_instruction": s.embedding_query_instruction,
         "reranker_max_length": s.reranker_max_length,
         "reranker_max_windows": s.reranker_max_windows,
-        "feature_schema": 2,
+        "feature_schema": 3,
         "parser_schema": 5,
     }
 
@@ -99,9 +107,12 @@ def release():
 
 def features(question, hit, best):
     from backend.knowledge import lexemes
+    from backend.rag_v3_answerability import TOPIC_ONLY, assess_candidate, decompose_question
     from backend.rag_v3_index import exact_terms
+    from backend.rag_v3_policy import retrieval_question
 
-    terms = set(lexemes(question).split())
+    assessment = hit.get("answerability") or assess_candidate(decompose_question(question), hit)
+    terms = set(lexemes(retrieval_question(question)).split())
     body = set(lexemes(hit["text"]).split())
     heading = set(lexemes(hit.get("heading", "")).split())
     ids = exact_terms(question)
@@ -126,6 +137,14 @@ def features(question, hit, best):
                 ),
                 sum(p in hit["text"] for p in phrases) / max(1, len(phrases)),
                 sum(c.lower() in hit["text"].lower() for c in conditions) / max(1, len(conditions)),
+                assessment["attribute_coverage"],
+                assessment["topic_coverage"],
+                assessment["scope_coverage"],
+                float(assessment["language_pair"] not in {"same", "mixed", "unknown"}),
+                float(assessment["language_pair"] == "en_to_zh"),
+                float(assessment["language_pair"] == "zh_to_en"),
+                float(assessment["gated"]),
+                float(assessment["label"] == TOPIC_ONLY),
             ),
             strict=True,
         )

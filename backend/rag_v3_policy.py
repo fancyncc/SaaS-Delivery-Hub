@@ -2,7 +2,9 @@
 import re
 from dataclasses import dataclass
 
-PIPELINE_SCHEMA = 5
+from backend.rag_v3_answerability import bilingual_expansion
+
+PIPELINE_SCHEMA = 6
 
 # Deterministic retrieval-only translations for common cross-language source
 # terminology.  The original question and source text remain unchanged in the
@@ -158,7 +160,8 @@ def retrieval_question(question):
     if re.search(r'属性|字段|\b(?:attributes?|properties|fields?)\b', question, re.I):
         additions.extend(('字段定义', '数据模型', '字段字典'))
     additions.extend(cross_language_terms(question))
-    return question + (' ' + ' '.join(additions) if additions else '')
+    expanded = question + (' ' + ' '.join(additions) if additions else '')
+    return bilingual_expansion(expanded)
 
 
 @dataclass(frozen=True)

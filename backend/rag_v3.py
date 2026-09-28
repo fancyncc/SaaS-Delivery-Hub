@@ -3,6 +3,7 @@
 import asyncio
 import json
 import re
+import time
 
 from sqlalchemy import exists, or_, select
 from sqlalchemy.orm import aliased, load_only
@@ -10,6 +11,14 @@ from sqlalchemy.orm import aliased, load_only
 from backend.config import get_settings
 from backend.knowledge import lexemes
 from backend.models import KnowledgeDocument
+from backend.rag_v3_answerability import (
+    CONTRADICT,
+    TOPIC_ONLY,
+    assess_candidate,
+    coverage_matrix,
+    decompose_question,
+    evidence_score,
+)
 from backend.rag_v3_context import ranking_text
 from backend.rag_v3_index import exact_terms, identity
 from backend.rag_v3_models import V3Document, V3Node, V3Unit
@@ -384,7 +393,14 @@ async def inspect(session, tenant, question, projects, budget):
     config = (
         release()
         if settings.rag_v3_relevance_mode == "calibrated"
-        else {"relevance_mode": "rules", "min_rerank_score": settings.rag_v3_min_rerank_score}
+        else {
+            "relevance_mode": "rules",
+            "min_rerank_score": settings.rag_v3_min_rerank_score,
+            "same_language_min_evidence_score": settings.rag_v3_same_language_min_evidence_score,
+            "en_to_zh_min_evidence_score": settings.rag_v3_en_to_zh_min_evidence_score,
+            "zh_to_en_min_evidence_score": settings.rag_v3_zh_to_en_min_evidence_score,
+            "mixed_language_min_evidence_score": settings.rag_v3_mixed_language_min_evidence_score,
+        }
     )
     result = await run(session, tenant, question, projects, budget, config)
     result["relevance_mode"] = settings.rag_v3_relevance_mode
@@ -394,16 +410,33 @@ async def inspect(session, tenant, question, projects, budget):
 
 def classify_relevance(features, config):
     if config.get("relevance_mode") == "rules":
-        # The deployed CrossEncoder returns sigmoid scores. This explicit
-        # threshold is a heuristic, not calibrated answer confidence.
-        score = features["rerank"]
-        return score >= config["min_rerank_score"], score
+        # Ungated questions retain the legacy fallback. Attribute-bearing
+        # questions use an independent, language-pair-aware answerability score.
+        if not features.get("answerability_gated"):
+            score = features["rerank"]
+            return score >= config["min_rerank_score"], score
+        score = evidence_score(features)
+        if features.get("topic_only") or features.get("attribute_coverage", 0) <= 0:
+            return False, score
+        if features.get("en_to_zh"):
+            threshold = config.get("en_to_zh_min_evidence_score", 0.35)
+        elif features.get("zh_to_en"):
+            threshold = config.get("zh_to_en_min_evidence_score", 0.35)
+        elif features.get("language_bridge"):
+            threshold = config.get("mixed_language_min_evidence_score", 0.45)
+        else:
+            threshold = config.get("same_language_min_evidence_score", 0.5)
+        return score >= threshold, score
     return classify(features, config["classifier"])
 
 
 async def run(session, tenant, question, projects, budget, config):
     """Internal offline evaluator entry. The HTTP route always uses inspect/release."""
+    started = time.perf_counter()
+    phase_started = started
+    timings = {}
     rows = (await session.execute(visible_documents(tenant, projects))).all()
+    timings["authorization_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
     documents = {s.id: (s, d) for s, d in rows if s.phase == "ready" and s.identity == identity()}
     pending = sum(s.phase != "ready" or s.identity != identity() for s, d in rows)
     if not documents:
@@ -423,7 +456,9 @@ async def run(session, tenant, question, projects, budget, config):
             "pending_documents": pending,
         }
     policy = query_policy(question)
+    frame = decompose_question(question)
     candidates_by_id, routes, branches = {}, {}, []
+    phase_started = time.perf_counter()
     for branch, query in enumerate(policy.queries):
         hits, route_counts = await recall(session, tenant, query, documents, policy)
         branches.append(hits)
@@ -432,6 +467,7 @@ async def run(session, tenant, question, projects, budget, config):
         for h in hits:
             candidate = candidates_by_id.setdefault(h["id"], h)
             candidate.setdefault("query_branches", []).append(branch)
+    timings["recall_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
     # Interleave comparison branches before the bounded reranker input.
     candidates, visited = [], set()
     for index in range(max(map(len, branches), default=0)):
@@ -461,26 +497,42 @@ async def run(session, tenant, question, projects, budget, config):
         routes["structure"] = len(structural)
         candidates = [h for h in candidates if h["document_id"] in scoped_documents]
     identifiers_by_document = document_object_identifiers(candidates)
+    # Preserve bounded candidates with explicit requested-attribute coverage
+    # before the reranker limit. This is a deterministic quota, not relevance.
+    for candidate in candidates:
+        candidate["answerability"] = assess_candidate(frame, candidate)
+    candidates.sort(
+        key=lambda h: (
+            h["answerability"]["label"] == TOPIC_ONLY,
+            -h["answerability"]["attribute_coverage"],
+        )
+    )
+    phase_started = time.perf_counter()
     ranked = await rerank(ranking_question, candidates[: policy.rerank_limit])
+    timings["rerank_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
     best = ranked[0]["rerank_score"] if ranked else 0
     direct, relevant = [], []
+    phase_started = time.perf_counter()
     for h in ranked:
+        h["answerability"] = assess_candidate(frame, h)
         h["features"] = features(question, h, best)
         accepted, h["relevance_value"] = classify_relevance(h["features"], config)
+        h["evidence_score"] = evidence_score(h["features"])
         if (
             not accepted
             and config.get("relevance_mode") == "rules"
             and scoped_documents
+            and h["answerability"]["label"] != TOPIC_ONLY
             and explicit_structure_match(question, h, policy)
             and identifier_matches(question, h, identifiers_by_document)
         ):
             accepted = True
             h["rule_relevance"] = "explicit_identifier_and_field_label"
         if not accepted and config.get("relevance_mode") == "rules":
-            if literal_cross_language_match(question, h):
+            if h["answerability"]["label"] != TOPIC_ONLY and literal_cross_language_match(question, h):
                 accepted = True
                 h["rule_relevance"] = "literal_cross_language_terms"
-            elif explicit_priority_match(question, h):
+            elif h["answerability"]["label"] != TOPIC_ONLY and explicit_priority_match(question, h):
                 accepted = True
                 h["rule_relevance"] = "explicit_priority_order"
         h["evidence_role"] = "direct" if accepted else "irrelevant"
@@ -488,6 +540,7 @@ async def run(session, tenant, question, projects, budget, config):
         if accepted:
             direct.append(h)
             relevant.append(h)
+    timings["answerability_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
     # Supporting requires a concrete direct anchor, never just a lower score.
     for h in ranked:
         anchors = [core["id"] for core in direct if structural_relation(core, h)]
@@ -496,12 +549,16 @@ async def run(session, tenant, question, projects, budget, config):
             if h["evidence_role"] == "irrelevant":
                 h["evidence_role"] = h["disposition"] = "supporting"
                 relevant.append(h)
+    phase_started = time.perf_counter()
     additions = await supplement(session, tenant, direct, documents, policy)
     additions = await rerank(ranking_question, additions)
+    timings["supplement_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
     known = {h["id"]: h for h in relevant}
     for h in additions:
+        h["answerability"] = assess_candidate(frame, h)
         h["features"] = features(question, h, best)
         _, h["relevance_value"] = classify_relevance(h["features"], config)
+        h["evidence_score"] = evidence_score(h["features"])
         relation = h.get("repair_relation")
         h["evidence_role"] = (
             "direct" if relation == "enumeration" else "supporting" if relation else "irrelevant"
@@ -515,6 +572,15 @@ async def run(session, tenant, question, projects, budget, config):
         elif h["evidence_role"] != "irrelevant":
             relevant.append(h)
             known[h["id"]] = h
+    answerability = coverage_matrix(
+        frame, [h for h in relevant if h.get("evidence_role") == "direct"]
+    )
+    if not answerability["complete"]:
+        for h in relevant:
+            h["evidence_role"] = "partial"
+            h["disposition"] = "incomplete_answerability"
+        direct = []
+        relevant = []
     # Shared repairs must stay attached to every applicable core, even when
     # fetched once. Enumeration peers are distinct facts, not one giant package.
     for h in relevant:
@@ -554,7 +620,13 @@ async def run(session, tenant, question, projects, budget, config):
     ranked = [h for h in ranked if h["document_id"] in allowed]
     additions = [h for h in additions if h["document_id"] in allowed]
     candidates = [h for h in candidates if h["document_id"] in allowed]
+    phase_started = time.perf_counter()
     selected, evidence, total, saved, omitted, conflicts = await assemble(relevant, budget, policy)
+    timings["assembly_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
+    conflict_ids = {identifier for pair in conflicts for identifier in pair}
+    for h in selected:
+        if h["id"] in conflict_ids:
+            h["answerability"] = {**h.get("answerability", {}), "label": CONTRADICT}
     original = sum(await counts([serialize(h) for h in candidates]))
     repair_limited = any(h.get("repair_limited") for h in relevant)
     budget_limited = repair_limited or any(
@@ -586,7 +658,7 @@ async def run(session, tenant, question, projects, budget, config):
         "pipeline_schema": PIPELINE_SCHEMA,
         "status": status,
         "query_types": list(policy.types),
-        "result_status": "evidence_found" if selected else "insufficient",
+        "result_status": "evidence_found" if selected and not conflicts else "insufficient",
         "budget_limited": budget_limited,
         "conflict": bool(conflicts),
         "chunks": selected,
@@ -594,6 +666,7 @@ async def run(session, tenant, question, projects, budget, config):
         "coverage": "unknown",
         "completeness": "unknown",
         "pending_documents": pending,
+        "answerability": answerability,
         "conflicts": conflicts,
         "omitted": omitted,
         "omission_details": omission_details,
@@ -614,6 +687,10 @@ async def run(session, tenant, question, projects, budget, config):
             "query_identifiers": list(query_identifiers(question)),
             "identifier_scoped_documents": len(scoped_documents or ()),
             "tokenizer": "BGE 检索 tokenizer token",
+            "timings_ms": {
+                **timings,
+                "total": round((time.perf_counter() - started) * 1000, 2),
+            },
             "candidates": ranked
             + additions
             + [{**h, "disposition": "未进入重排上限"} for h in candidates[policy.rerank_limit :]],

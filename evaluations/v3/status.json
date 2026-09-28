@@ -17,7 +17,8 @@
   "failures": [
     "Independent human review of the source labels and selected evidence is pending",
     "A locked validation set built from representative customer documents is pending",
-    "A paired independently reviewed model comparison for pipeline 5 is pending",
+    "Pipeline 6 answerability changes have not been measured with the real retrieval models",
+    "A paired independently reviewed model comparison for pipeline 6 is pending",
     "Generated-answer faithfulness, contradiction rate, completeness, and real no-answer behavior are not formally scored",
     "Standard Recall@3/5, MRR, and nDCG@5 still require complete graded relevance labels"
   ],
@@ -51,18 +52,19 @@
     "source_backed_pipeline5": 29
   },
   "operational_model_comparison_completed": true,
-  "current_pipeline_schema": 5,
+  "current_pipeline_schema": 6,
   "latest_measured_pipeline_schema": 5,
   "candidate_pipeline_validation": {
-    "relevant_tests_passed": 94,
-    "full_backend_tests_passed": 354,
+    "pipeline_schema": 6,
+    "relevant_tests_passed": 63,
+    "full_backend_tests_passed": 360,
     "full_backend_tests_skipped": 4,
     "ruff_passed": true,
-    "powershell_syntax_passed": true,
-    "frontend_typecheck_passed": true,
-    "frontend_build_passed": true,
-    "docker_deployed": true,
-    "real_model_evaluated": true
+    "powershell_syntax_passed": null,
+    "frontend_typecheck_passed": null,
+    "frontend_build_passed": null,
+    "docker_deployed": false,
+    "real_model_evaluated": false
   },
   "source_backed_questions": 29,
   "real_customer_documents": false

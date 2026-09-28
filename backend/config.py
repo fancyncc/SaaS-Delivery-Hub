@@ -67,6 +67,10 @@ class Settings(BaseSettings):
     rag_office_enabled: bool = True
     rag_v3_relevance_mode: Literal["rules", "calibrated"] = "rules"
     rag_v3_min_rerank_score: float = Field(default=0.5, allow_inf_nan=False)
+    rag_v3_same_language_min_evidence_score: float = Field(default=0.5, ge=0, le=1)
+    rag_v3_en_to_zh_min_evidence_score: float = Field(default=0.35, ge=0, le=1)
+    rag_v3_zh_to_en_min_evidence_score: float = Field(default=0.35, ge=0, le=1)
+    rag_v3_mixed_language_min_evidence_score: float = Field(default=0.45, ge=0, le=1)
     rag_v3_release: str = "evaluations/v3/release.json"
     rag_v3_model_profile: str = ""
     rag_inspection_calibration: str = "evaluations/inspection_calibration.json"

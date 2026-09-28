@@ -1,0 +1,50 @@
+{
+  "dataset_id": "v3-blind-holdout-v1",
+  "frozen_before_first_run": true,
+  "cases_sha256": "e953b32dd37350f670e9f453df5bc9b52392da4fbd4c35ce8324b0faaa7099ed",
+  "independent_review_completed": false,
+  "customer_documents": false,
+  "scope": "one-time blind generalization observation on newly authored SaaS implementation documents; no post-result tuning",
+  "sources": [
+    {
+      "document": "sources/aurora_cutover.md",
+      "sha256": "d15d30258306e204e3ec26dc122b6413a17e203d19ac71df24834743170bb15a",
+      "source_kind": "synthetic_unseen_business_document",
+      "source": "locally authored holdout fixture",
+      "revision": null,
+      "license": "repository test fixture"
+    },
+    {
+      "document": "sources/beacon_access.md",
+      "sha256": "27747ad9bfe1a8561de0d4e9ac79dd0e0eb5309b44ae8503ca080b0f83437f1d",
+      "source_kind": "synthetic_unseen_business_document",
+      "source": "locally authored holdout fixture",
+      "revision": null,
+      "license": "repository test fixture"
+    },
+    {
+      "document": "sources/cedar_migration.md",
+      "sha256": "a0a921db9bcbf856d46d129809c2966bdb6408f3d5cf7841430738a895a78f52",
+      "source_kind": "synthetic_unseen_business_document",
+      "source": "locally authored holdout fixture",
+      "revision": null,
+      "license": "repository test fixture"
+    },
+    {
+      "document": "sources/drift_training.md",
+      "sha256": "dda998142bf4777cd24ebe981beebffda36c5bdaa21e459d371ce6971c34f437",
+      "source_kind": "synthetic_unseen_business_document",
+      "source": "locally authored holdout fixture",
+      "revision": null,
+      "license": "repository test fixture"
+    },
+    {
+      "document": "sources/ember_support.md",
+      "sha256": "9c48aed3d8a5c4f5664bc5729f80b1a6f8d262c9891b1552bea601a55f86c412",
+      "source_kind": "synthetic_unseen_business_document",
+      "source": "locally authored holdout fixture",
+      "revision": null,
+      "license": "repository test fixture"
+    }
+  ]
+}
