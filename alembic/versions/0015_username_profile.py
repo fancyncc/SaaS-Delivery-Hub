@@ -2,6 +2,7 @@
 from uuid import NAMESPACE_URL, uuid5
 
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0015_username_profile"

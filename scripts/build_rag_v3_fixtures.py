@@ -2,8 +2,8 @@
 import csv
 import io
 import json
-from pathlib import Path
 import zipfile
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 ROOT=Path(__file__).resolve().parents[1]/'evaluations/v3'
@@ -28,17 +28,25 @@ def write_docx(path,heading,records):
 
 
 def main():
-    fixtures=ROOT/'fixtures'; fixtures.mkdir(parents=True,exist_ok=True); cases=[]
+    fixtures=ROOT/'fixtures'
+    fixtures.mkdir(parents=True,exist_ok=True)
+    cases=[]
     for d,(domain,zh,en,code,limit,rule_zh,rule_en) in enumerate(DOMAINS):
         for fmt in ['md','txt','csv','json','docx']:
             identifier=code+'-204'
             records={'id':identifier,'limit':str(limit),'conditions':rule_zh+' '+rule_en,
                 'fields':'id, owner, created_at, status','distractor':'ARCHIVE-999 uses a separate limit of 999. 此限制不适用于当前对象。'}
             path=fixtures/(domain+'.'+fmt)
-            if fmt=='json': path.write_text(json.dumps({identifier:records},ensure_ascii=False,indent=2),encoding='utf-8')
+            if fmt=='json':
+                path.write_text(json.dumps({identifier:records},ensure_ascii=False,indent=2),encoding='utf-8')
             elif fmt=='csv':
-                stream=io.StringIO(newline=''); writer=csv.writer(stream); writer.writerow(records.keys()); writer.writerow(records.values()); path.write_text(stream.getvalue(),encoding='utf-8')
-            elif fmt=='docx': write_docx(path,zh+' / '+en,records)
+                stream=io.StringIO(newline='')
+                writer=csv.writer(stream)
+                writer.writerow(records.keys())
+                writer.writerow(records.values())
+                path.write_text(stream.getvalue(),encoding='utf-8')
+            elif fmt=='docx':
+                write_docx(path,zh+' / '+en,records)
             else:
                 prefix='# ' if fmt=='md' else ''
                 path.write_text(prefix+zh+' / '+en+'\n\n'+'\n\n'.join(k+': '+v for k,v in records.items()),encoding='utf-8')
@@ -57,4 +65,5 @@ def main():
     print(f'{len(cases)} synthetic cases; independent review pending')
 
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+    main()

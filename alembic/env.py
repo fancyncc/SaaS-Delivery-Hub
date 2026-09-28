@@ -8,9 +8,11 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from backend import agent_models  # noqa: F401
-from backend import chat_models  # noqa: F401
-from backend import rag_v3_models  # noqa: F401
+from backend import (
+    agent_models,  # noqa: F401
+    chat_models,  # noqa: F401
+    rag_v3_models,  # noqa: F401
+)
 from backend.config import get_settings
 from backend.models import Base
 from backend.retrieval_sources_models import RetrievalBase

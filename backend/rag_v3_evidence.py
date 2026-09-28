@@ -71,7 +71,11 @@ async def assemble_evidence(relevant, budget, count, serialize, policy=None):
                 omitted.append(h['id'])
         else:
             packages.append(package)
-    packages.sort(key=lambda p: (-p[0].get('rerank_score', 0), p[0]['id']))
+    packages.sort(key=lambda p: (
+        -int(bool(p[0].get('rule_relevance'))),
+        -p[0].get('rerank_score', 0),
+        p[0]['id'],
+    ))
     # Round-robin explicit comparison branches (or source/heading scopes).
     if 'comparison' in policy.types:
         groups = {}
@@ -93,6 +97,7 @@ async def assemble_evidence(relevant, budget, count, serialize, policy=None):
             # breaks ties. Keep raw source text intact rather than synthesizing it.
             packages.sort(key=lambda p: (
                 -len(fact_atoms(p[0])-covered)/max(1, len(fact_atoms(p[0]))),
+                -int(bool(p[0].get('rule_relevance'))),
                 -p[0].get('rerank_score', 0), p[0]['id']))
         package = packages.pop(0)
         extra = [h for h in package if h['id'] not in selected_ids]

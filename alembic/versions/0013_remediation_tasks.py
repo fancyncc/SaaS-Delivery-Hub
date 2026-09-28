@@ -1,5 +1,6 @@
 """Track actual failed acceptance checks through remediation runs."""
 import sqlalchemy as sa
+
 from alembic import op
 
 revision = "0013_remediation_tasks"

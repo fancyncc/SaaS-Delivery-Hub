@@ -192,7 +192,7 @@ def main():
             save()
             print(f"Registered {filename}", flush=True)
         ids = {d['id'] for d in manifest['documents']}
-        for attempt in range(90):
+        for _attempt in range(90):
             rows = [d for d in call('GET', '/api/knowledge') if d['id'] in ids]
             ready = sum(d['index_status'] == 'ready' for d in rows)
             failed = sum(d['index_status'] == 'failed' for d in rows)

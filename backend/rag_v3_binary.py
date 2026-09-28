@@ -123,8 +123,19 @@ def parse_pdf(raw: bytes, add, result) -> None:
                 result.warnings.append(f"第 {page_number} 页使用 OCR，识别内容请人工核对")
         elif has_images:
             result.warnings.append(f"第 {page_number} 页仅提取文字层，图片内容未识别")
+        list_scope = None
+        list_number = 0
         for block_index, (block, chars, heading) in enumerate(pdf_blocks(text), 1):
-            add("paragraph", block, {"page": page_number, "block": block_index, "chars": chars}, heading=heading)
+            bullet = bool(re.match(r"^[•–]\s+", block.lstrip()))
+            if bullet and list_scope is None:
+                list_number += 1
+                list_scope = f"pdf:{page_number}:{list_number}"
+            elif not bullet:
+                list_scope = None
+            location = {"page": page_number, "block": block_index, "chars": chars}
+            if bullet:
+                location["list_scope"] = list_scope
+            add("list_item" if bullet else "paragraph", block, location, heading=heading)
     if not result.nodes:
         raise HTTPException(422, "PDF 没有可检索文字")
 

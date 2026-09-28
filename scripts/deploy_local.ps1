@@ -13,11 +13,10 @@ $owner = [string]$compose.services.postgres.environment.POSTGRES_USER
 if ($database -notmatch '^[A-Za-z0-9_]+$' -or $owner -notmatch '^[A-Za-z0-9_]+$') {
     throw 'Database name or owner contains unsupported characters.'
 }
-$postgres = [string](docker compose ps -q postgres)
-if ($LASTEXITCODE -ne 0 -or -not $postgres.Trim()) {
+$postgres = (& docker compose ps -q postgres | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or -not $postgres) {
     throw 'PostgreSQL container is not running.'
 }
-$postgres = $postgres.Trim()
 
 Invoke-DockerChecked @('compose', 'build', 'migrate')
 $headOutput = & docker compose run --rm --no-deps migrate alembic heads
@@ -85,7 +84,36 @@ try {
     if ($retrievalHealth -ne 'healthy') { throw 'Retrieval readiness check timed out.' }
     Invoke-DockerChecked @('compose', 'exec', '-T', 'retrieval', 'python', '-c',
         "import urllib.request; urllib.request.urlopen('http://localhost:8010/health/ready', timeout=10)")
-    Write-Output "Local release ready at revision $head. Verified backup: $backup"
+
+    # Parser/model identity changes invalidate the derived V3 side index. The
+    # single beat schedules the indexer in bounded batches; do not report a
+    # synchronized release while old-identity documents are still pending.
+    $v3Identity = (& docker compose exec -T api python -c 'from backend.rag_v3_index import identity; print(identity())').Trim()
+    if ($LASTEXITCODE -ne 0 -or $v3Identity -notmatch '^v3-structure-1:[a-f0-9]{32}$') {
+        throw 'Unable to resolve the deployed V3 index identity.'
+    }
+    $lastBackfillState = ''
+    $v3Synchronized = $false
+    for ($attempt = 0; $attempt -lt 180; $attempt++) {
+        $query = "SELECT count(*) FILTER (WHERE phase='ready' AND identity='$v3Identity'), count(*) FILTER (WHERE phase='failed'), count(*) FROM rag_v3_documents;"
+        $backfillState = ((& docker exec $postgres psql -U $owner -d $database -At -F '|' -c $query) -join '').Trim()
+        if ($LASTEXITCODE -ne 0 -or $backfillState -notmatch '^\d+\|\d+\|\d+$') {
+            throw 'Unable to inspect the V3 index backfill state.'
+        }
+        if ($backfillState -ne $lastBackfillState) {
+            Write-Output "V3 backfill state (ready-current|failed|total): $backfillState"
+            $lastBackfillState = $backfillState
+        }
+        $counts = $backfillState.Split('|') | ForEach-Object { [int]$_ }
+        if ($counts[1] -gt 0) { throw "V3 backfill contains $($counts[1]) failed document(s)." }
+        if ($counts[0] -eq $counts[2]) {
+            $v3Synchronized = $true
+            break
+        }
+        Start-Sleep -Seconds 5
+    }
+    if (-not $v3Synchronized) { throw 'V3 index backfill did not finish within 15 minutes.' }
+    Write-Output "Local release ready at revision $head with synchronized V3 indexes. Verified backup: $backup"
 } catch {
     $failure = $_
     if ($migrationStarted -and -not $migrationComplete -and $backupVerified) {

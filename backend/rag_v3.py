@@ -15,7 +15,15 @@ from backend.rag_v3_index import exact_terms, identity
 from backend.rag_v3_models import V3Document, V3Node, V3Unit
 from backend.rag_v3_policy import (
     PIPELINE_SCHEMA,
+    document_object_identifiers,
+    explicit_priority_match,
+    explicit_structure_match,
+    identifier_documents,
+    identifier_matches,
+    literal_cross_language_match,
+    query_identifiers,
     query_policy,
+    requested_labels,
     retrieval_question,
     structural_relation,
 )
@@ -321,6 +329,54 @@ async def attach_identity_context(session, tenant, candidates, documents):
         h["identity_context"] = "\n".join(n.structure["text"] for n in allowed)
 
 
+async def recall_explicit_structure(
+    session,
+    tenant,
+    question,
+    scoped_documents,
+    identifiers_by_document,
+    documents,
+    seen,
+    policy,
+):
+    """Recall explicitly labelled fields inside an exact identifier source scope."""
+    labels = requested_labels(question, policy)
+    if not labels or not scoped_documents:
+        return []
+    rows = list(
+        await session.scalars(
+            select(V3Unit)
+            .where(
+                V3Unit.tenant_id == tenant,
+                V3Unit.document_id.in_(scoped_documents),
+                V3Unit.id.not_in(seen),
+                or_(*[V3Unit.text.icontains(label, autoescape=True) for label in labels]),
+            )
+            .order_by(V3Unit.ordinal)
+            .limit(policy.repair_limit * 2)
+        )
+    )
+    hits = [
+        hit(
+            unit,
+            documents[unit.document_id][1],
+            supplemented=True,
+            structural_recall=True,
+            score=None,
+            recall_scores={"structure": 1.0},
+            query_branches=[0],
+        )
+        for unit in rows
+    ]
+    await attach_identity_context(session, tenant, hits, documents)
+    return [
+        item
+        for item in hits
+        if explicit_structure_match(question, item, policy)
+        and identifier_matches(question, item, identifiers_by_document)
+    ]
+
+
 async def inspect(session, tenant, question, projects, budget):
     from backend.config import get_settings
 
@@ -385,12 +441,48 @@ async def run(session, tenant, question, projects, budget, config):
                 candidates.append(candidates_by_id[branch[index]["id"]])
     ranking_question = retrieval_question(question)
     await attach_identity_context(session, tenant, candidates, documents)
+    identifiers_by_document = document_object_identifiers(candidates)
+    scoped_documents = identifier_documents(question, candidates)
+    if scoped_documents:
+        structural = await recall_explicit_structure(
+            session,
+            tenant,
+            question,
+            scoped_documents,
+            identifiers_by_document,
+            documents,
+            {h["id"] for h in candidates},
+            policy,
+        )
+        for item in structural:
+            if item["id"] not in visited:
+                visited.add(item["id"])
+                candidates.append(item)
+        routes["structure"] = len(structural)
+        candidates = [h for h in candidates if h["document_id"] in scoped_documents]
+    identifiers_by_document = document_object_identifiers(candidates)
     ranked = await rerank(ranking_question, candidates[: policy.rerank_limit])
     best = ranked[0]["rerank_score"] if ranked else 0
     direct, relevant = [], []
     for h in ranked:
         h["features"] = features(question, h, best)
         accepted, h["relevance_value"] = classify_relevance(h["features"], config)
+        if (
+            not accepted
+            and config.get("relevance_mode") == "rules"
+            and scoped_documents
+            and explicit_structure_match(question, h, policy)
+            and identifier_matches(question, h, identifiers_by_document)
+        ):
+            accepted = True
+            h["rule_relevance"] = "explicit_identifier_and_field_label"
+        if not accepted and config.get("relevance_mode") == "rules":
+            if literal_cross_language_match(question, h):
+                accepted = True
+                h["rule_relevance"] = "literal_cross_language_terms"
+            elif explicit_priority_match(question, h):
+                accepted = True
+                h["rule_relevance"] = "explicit_priority_order"
         h["evidence_role"] = "direct" if accepted else "irrelevant"
         h["disposition"] = h["evidence_role"]
         if accepted:
@@ -519,6 +611,8 @@ async def run(session, tenant, question, projects, budget, config):
             "budget": budget,
             "unit_limit": policy.unit_limit,
             "repair_limit": policy.repair_limit,
+            "query_identifiers": list(query_identifiers(question)),
+            "identifier_scoped_documents": len(scoped_documents or ()),
             "tokenizer": "BGE 检索 tokenizer token",
             "candidates": ranked
             + additions

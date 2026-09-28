@@ -4,9 +4,11 @@
 
 知识文档可上传 PDF（含扫描页 OCR）、PPTX、XLSX 及原有格式，经 V3 后台索引后供 RAG 查验、聊天和 Agent 检索。格式范围、限制和失败处理见 [PDF 与 Office 知识文档](docs/RAG_BINARY_DOCUMENTS.md)。
 
-本机功能部署和正式检索质量验收分别记录。2026-09-27 已补充真实模型观测和浏览器验收；合成边界题的最终证据覆盖率尚未达标，校准策略仍未获准启用。结果及剩余事项见 [本机验收记录](evaluations/v3/LOCAL_ACCEPTANCE.md)。
+本机功能部署和正式检索质量验收分别记录。2026-09-28 已部署解析/证据流程版本 5，并完成真实模型、数据库、队列和索引验收；正式质量发布仍等待独立人工复核、客户资料锁定验证和生成回答评分。结果及剩余事项见 [本机验收记录](evaluations/v3/LOCAL_ACCEPTANCE.md)。
 
-已准备 [首轮 RAG 质量题库](evaluations/v3/business/questions.md)：仓库文档固定快照和公开 PDF，共 29 题。使用本机真实模型记录改进前后证据、引用、无答案与预算指标，结果见 [检索质量记录](evaluations/v3/business/RESULTS.md)。标签尚待独立复核，题库用于开发诊断。
+已准备 [首轮 RAG 质量题库](evaluations/v3/business/questions.md)：仓库文档固定快照和公开 PDF，共 29 题。版本 5 的真实模型复测达到 44/44 个必要片段最终覆盖，5 个无答案题均未返回证据；结果见 [检索质量记录](evaluations/v3/business/RESULTS.md)。标签尚待独立复核，题库用于开发诊断。
+
+完整的指标、方法、逐格式差异、性能、生成评分缺口及门禁结论见 [详细测评报告](evaluations/v3/DETAILED_EVALUATION_REPORT.md)。2026-09-28 13:24 已验证 Docker Desktop 4.92、API、真实模型、两个队列消费者、单实例 beat 和 46 份 V3 索引；192 道八格式边界题的 318 个必要片段最终覆盖为 100%，PDF 为 36/36。该自动化结果支持本机技术验收，正式质量门禁仍因独立复核与客户资料验证未完成而保持关闭。
 
 上下文改进已实现统一 token 预算、结构化会话状态、滚动摘要、私有历史混合召回及分作用域记忆。功能按 `CHAT_CONTEXT_MODE`、`CHAT_HISTORY_ENABLED`、`CHAT_MEMORY_ITEMS_ENABLED` 和 `CHAT_MEMORY_CANDIDATES_ENABLED` 分阶段启用；仓库 `.env.example` 默认关闭，本机 Docker 验收环境已依次通过 `shadow`、`on`、历史与记忆功能，当前开启这些功能。候选记忆的自动提取仍由用户自行选择开启，默认关闭。验收顺序见 [上下文与记忆说明](docs/CONTEXT_MEMORY.md)。
 

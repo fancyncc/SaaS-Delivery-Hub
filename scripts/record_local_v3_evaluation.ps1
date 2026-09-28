@@ -2,8 +2,11 @@
 param(
     [ValidateSet('Demo', 'Boundary', 'All')][string] $Dataset = 'All',
     [ValidateSet(600, 1200, 1800)][int[]] $Budgets = @(1200),
+    [ValidateSet('md', 'txt', 'docx', 'csv', 'json', 'pdf', 'pptx', 'xlsx')]
+    [string[]] $Formats = @('md', 'txt', 'docx', 'csv', 'json', 'pdf', 'pptx', 'xlsx'),
     [string] $ModelProfile = '',
-    [string] $OutputDirectory = ''
+    [string] $OutputDirectory = '',
+    [switch] $UseWorkspaceBackend
 )
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path -Parent $PSScriptRoot)
@@ -24,6 +27,11 @@ Invoke-EvaluationDocker @('compose', 'exec', '-T', 'api', 'python', '-c',
     "from pathlib import Path; Path('$containerDir/scripts').mkdir(parents=True)")
 foreach ($script in @('evaluate_v3_demo.py', 'record_v3_boundary_runs.py')) {
     Invoke-EvaluationDocker @('compose', 'cp', "scripts/$script", "api:$containerDir/scripts/$script")
+}
+if ($UseWorkspaceBackend) {
+    # The evaluator imports an isolated workspace copy. Running API code and
+    # deployed indexes remain unchanged until the normal deployment completes.
+    Invoke-EvaluationDocker @('compose', 'cp', 'backend', "api:$containerDir/backend")
 }
 $environmentArgs = @('-e', "PYTHONPATH=${containerDir}:/app")
 if ($ModelProfile) {
@@ -50,7 +58,7 @@ if ($Dataset -in @('Boundary', 'All')) {
         $report = "boundary-$budget.json"
         try {
             Invoke-EvaluationDocker ($runtime + @("$containerDir/scripts/record_v3_boundary_runs.py",
-                '--output', "$containerDir/$report", '--budget', [string]$budget))
+                '--output', "$containerDir/$report", '--budget', [string]$budget, '--formats') + $Formats)
         } finally {
             # Preserve any completed formats after a later format fails.
             & docker.exe compose cp "api:$containerDir/$report" (Join-Path $outputDir $report)

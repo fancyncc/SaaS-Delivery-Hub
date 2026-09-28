@@ -61,6 +61,22 @@ def test_pdf_explicit_sections_and_bullets_preserve_wrapped_source():
     assert "".join(block.replace("\n", "") for block, _, _ in blocks) == text.replace("\n", "")
 
 
+def test_pdf_bullets_are_indexed_as_one_bounded_list_scope():
+    raw = pdf_with_text(
+        "2.2 Automated Testing\\n"
+        "We recommend verification to\\n"
+        "\\267 ensure static analysis is clean,\\n"
+        "\\267 check results accurately, and\\n"
+        "2.3 Static Analysis\\nNext section."
+    )
+    parsed = parse("verification.pdf", raw)
+    bullets = [node for node in parsed.nodes if node.kind == "list_item"]
+    assert len(bullets) == 2
+    assert bullets[0].location["list_scope"] == bullets[1].location["list_scope"]
+    assert parsed.nodes[-1].kind == "paragraph"
+    assert "list_scope" not in parsed.nodes[-1].location
+
+
 def test_isolated_parser_protocol_is_utf8_under_windows_locale(monkeypatch):
     monkeypatch.setenv("PYTHONIOENCODING", "gbk")
     parsed = parse_isolated("policy.txt", "编号：A-1\n\n不得删除。".encode())

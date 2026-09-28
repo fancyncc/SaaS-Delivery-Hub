@@ -9,7 +9,18 @@ from backend import rag_v3 as pipeline
 from backend.db import SessionLocal
 from backend.models import KnowledgeDocument, Tenant
 from backend.rag_v3_index import index_document, register
-from backend.rag_v3_policy import query_policy
+from backend.rag_v3_policy import (
+    cross_language_terms,
+    document_object_identifiers,
+    explicit_priority_match,
+    explicit_structure_match,
+    identifier_documents,
+    identifier_matches,
+    literal_cross_language_match,
+    object_identifiers,
+    query_identifiers,
+    query_policy,
+)
 from backend.rag_v3_release import FEATURES
 from tests.test_rag_v3 import evidence
 
@@ -21,6 +32,8 @@ async def tokens(texts):
 @pytest.mark.parametrize('question, expected', [
     ('列出全部退款条件', {'enumeration', 'condition'}),
     ('比较“Basic”和“Pro”的所有字段', {'comparison', 'enumeration'}),
+    ('相同 key 的私有记忆在哪个作用域优先？', {'priority'}),
+    ('What should verification ensure about analysis and results?', {'enumeration'}),
     ('What is E_403?', {'identifier'}), ('说明产品能力', {'fact'}),
 ])
 def test_query_types_do_not_gate_retrieval(question, expected):
@@ -38,6 +51,80 @@ def test_attribute_questions_expand_field_intent_without_changing_original():
     assert retrieval_question('首次响应时限是多少') == '首次响应时限是多少'
 
 
+def test_cross_language_expansion_requires_every_triggered_literal_concept():
+    from backend.rag_v3_policy import retrieval_question
+
+    question = '推荐检查代码中的哪些硬编码秘密？'
+    assert cross_language_terms(question) == ('hardcoded', 'secrets')
+    assert retrieval_question(question).endswith('hardcoded secrets')
+    correct = {
+        'heading': '2.4 Review for Hardcoded Secrets',
+        'text': 'Examine the code for hardcoded passwords and private encryption keys.',
+    }
+    wrong = {'heading': 'Memory safety', 'text': 'Do not map memory to hardcoded locations.'}
+    assert literal_cross_language_match(question, correct)
+    assert not literal_cross_language_match(question, wrong)
+    assert not literal_cross_language_match('代码里有什么问题？', correct)
+
+
+def test_priority_rule_requires_an_explicit_source_order():
+    question = '相同 key 的私有记忆在哪个作用域优先？'
+    ordered = {'text': '相同 key 按 conversation > project > workspace > user 覆盖。'}
+    vague = {'text': 'conversation scope has a higher priority.'}
+    placeholders = {'text': '`tiktoken:<encoding>` or `hf:<local model directory>`'}
+    assert explicit_priority_match(question, ordered)
+    assert not explicit_priority_match(question, vague)
+    assert not explicit_priority_match(question, placeholders)
+    assert not explicit_priority_match('私有记忆如何使用？', ordered)
+
+
+def test_explicit_identifier_scopes_authorized_documents_before_reranking():
+    candidates = [
+        {"document_id": "wanted", "text": "id: BUILD-204", "location": {}},
+        {"document_id": "wanted", "text": "conditions: retry only once", "location": {}},
+        {"document_id": "other", "text": "id: SKU-204", "location": {}},
+        {"document_id": "other", "text": "conditions: unrelated", "location": {}},
+    ]
+    assert query_identifiers("What conditions apply to BUILD-204?") == ("BUILD-204",)
+    assert identifier_documents("What conditions apply to BUILD-204?", candidates) == {"wanted"}
+    assert identifier_documents("What conditions apply?", candidates) is None
+
+
+def test_unlabelled_structure_requires_a_single_explicit_object_scope():
+    identified = {
+        "document_id": "wanted",
+        "text": "limit: 67",
+        "identity_context": "id: BUILD-204",
+        "location": {},
+    }
+    unlabelled = {"document_id": "wanted", "text": "conditions: retry once", "location": {}}
+    other = {"document_id": "wanted", "text": "id: SKU-204", "location": {}}
+    assert object_identifiers(identified) == ("build-204",)
+    one = document_object_identifiers([identified, unlabelled])
+    assert identifier_matches("What applies to BUILD-204?", unlabelled, one)
+    multiple = document_object_identifiers([identified, unlabelled, other])
+    assert not identifier_matches("What applies to BUILD-204?", unlabelled, multiple)
+
+
+def test_explicit_field_labels_can_repair_low_scores_without_answering_unknown_fields():
+    fields = {"text": "fields: id, owner, status", "location": {}, "kind": "paragraph"}
+    json_fields = {
+        "text": '$["BUILD-204"]["fields"]\n"id, owner, status"',
+        "location": {"path": '$["BUILD-204"]["fields"]'},
+        "kind": "json_value",
+    }
+    conditions = {
+        "text": "conditions: Retry once; cancelled jobs must not retry.",
+        "location": {},
+        "kind": "paragraph",
+    }
+    assert explicit_structure_match("List all fields of BUILD-204.", fields, query_policy("List all fields of BUILD-204."))
+    assert explicit_structure_match("List all fields of BUILD-204.", json_fields, query_policy("List all fields of BUILD-204."))
+    assert explicit_structure_match("What conditions apply to BUILD-204?", conditions, query_policy("What conditions apply to BUILD-204?"))
+    unknown = "What is the insurance premium of BUILD-204?"
+    assert not explicit_structure_match(unknown, fields, query_policy(unknown))
+
+
 async def test_enumeration_exceeds_eight_without_raising_token_budget(monkeypatch):
     monkeypatch.setattr(pipeline, 'token_counts', tokens)
     rows = [evidence(i, f'条件 {i} 必须满足') for i in range(12)]
@@ -46,6 +133,51 @@ async def test_enumeration_exceeds_eight_without_raising_token_budget(monkeypatc
     assert len(selected) == 12 and not omitted and used <= 1200
     normal, _, _, _, skipped, _ = await pipeline.assemble(rows, 1200)
     assert len(normal) == 8 and len(skipped) == 4
+
+
+async def test_structural_recall_repairs_a_missed_label_inside_exact_object_scope(monkeypatch):
+    from backend.rag_v3 import recall_explicit_structure
+    from backend.rag_v3_index import index_document, register
+
+    monkeypatch.setattr('backend.rag_v3_index.model_counts', tokens)
+    async with SessionLocal() as session:
+        tenant = await session.scalar(select(Tenant).where(Tenant.slug == 'legacy-demo'))
+        doc = KnowledgeDocument(
+            tenant_id=tenant.id,
+            title='Retry policy',
+            version=1,
+            module='test',
+            source='policy.md',
+            license='test',
+            body='id: BUILD-204\n\nconditions: Retry once; cancelled jobs must not retry.',
+        )
+        session.add(doc)
+        await session.flush()
+        source = await register(session, doc)
+        await index_document(session, source)
+        question = 'What conditions apply to BUILD-204?'
+        repaired = await recall_explicit_structure(
+            session,
+            tenant.id,
+            question,
+            {source.id},
+            {source.id: {'build-204'}},
+            {source.id: (source, doc)},
+            set(),
+            query_policy(question),
+        )
+        assert len(repaired) == 1 and repaired[0]['text'].startswith('conditions:')
+        unknown = 'What is the insurance premium of BUILD-204?'
+        assert await recall_explicit_structure(
+            session,
+            tenant.id,
+            unknown,
+            {source.id},
+            {source.id: {'build-204'}},
+            {source.id: (source, doc)},
+            set(),
+            query_policy(unknown),
+        ) == []
 
 
 async def test_rule_and_exception_are_atomic(monkeypatch):
@@ -98,6 +230,15 @@ async def test_literal_fact_coverage_precedes_relevance(monkeypatch):
             evidence(2, '订阅服务不适用。', rerank_score=.5)]
     chosen, *_ = await pipeline.assemble(rows, 600)
     assert [h['id'] for h in chosen] == ['0', '2', '1']
+
+
+async def test_rule_relevance_breaks_equal_coverage_before_model_score(monkeypatch):
+    monkeypatch.setattr(pipeline, 'token_counts', tokens)
+    wrong = evidence(0, 'Generic high-score paragraph.', rerank_score=.99)
+    exact = evidence(1, 'Explicit source-backed order.', rerank_score=.01)
+    exact['rule_relevance'] = 'explicit_priority_order'
+    chosen, *_ = await pipeline.assemble([wrong, exact], 600)
+    assert [h['id'] for h in chosen] == ['1', '0']
 
 
 async def test_sql_recall_prefilters_and_rejects_foreign_index_ids(monkeypatch):

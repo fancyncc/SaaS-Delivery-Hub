@@ -1,0 +1,23 @@
+{
+  "checked_at": "2026-09-27T18:59:29+08:00",
+  "scope": "Read-only runtime check during detailed report preparation",
+  "docker_context": "desktop-linux",
+  "docker_ps_all_containers": [],
+  "docker_compose_services": [],
+  "docker_cpus": 8,
+  "docker_memory_bytes": 8237715456,
+  "api_ready": {
+    "url": "http://localhost:8000/ready",
+    "reachable": false,
+    "failure": "connection refused"
+  },
+  "container_exec": {
+    "service": "api",
+    "available": false,
+    "failure": "service api is not running"
+  },
+  "historical_success_is_current_readiness": false,
+  "cause_confirmed": false,
+  "persistent_volumes_verified": false,
+  "recovery_performed": false
+}

@@ -1,0 +1,176 @@
+{
+  "generated_at": "2026-09-28T13:21:31.99733+08:00",
+  "release_approved": false,
+  "complete": true,
+  "scope": "synthetic operational observations; not calibrated locked validation or paired model comparison",
+  "independent_review_completed": false,
+  "baseline_measured": false,
+  "identity": {
+    "embedding": "BAAI/bge-small-zh-v1.5",
+    "embedding_revision": "7999e1d3359715c523056ef9478215996d62a620",
+    "reranker": "BAAI/bge-reranker-base",
+    "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+    "embedding_dimensions": 512,
+    "embedding_max_length": 512,
+    "query_style": "prefix",
+    "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+    "reranker_max_length": 256,
+    "reranker_max_windows": 32,
+    "feature_schema": 2,
+    "parser_schema": 5
+  },
+  "pipeline_schema": 5,
+  "relevance_mode": "rules",
+  "cases_sha256": "2be6254c52bcb2643567a96483ee6c587845c959950d089e350ee5016fd05d22",
+  "test_data_cleaned": true,
+  "metrics": {
+    "observations": 192,
+    "required_source_spans": 318,
+    "candidate_span_recall": 1.0,
+    "selected_span_coverage": 1.0,
+    "noanswer_cases": 48,
+    "noanswer_returned_evidence": 0,
+    "permission_leaks": 0,
+    "citation_errors": 0,
+    "budget_violations": 0,
+    "warm_latency_p95_ms": 873.55,
+    "statuses": {
+      "evidence_found": 144,
+      "insufficient_relevance": 48
+    }
+  },
+  "per_format": {
+    "md": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 721.26,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "txt": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 629.4,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "docx": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 696.26,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "csv": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 302.7,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "json": {
+      "observations": 24,
+      "required_source_spans": 42,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 930.93,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "pdf": {
+      "observations": 24,
+      "required_source_spans": 36,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 322.18,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "pptx": {
+      "observations": 24,
+      "required_source_spans": 36,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 513.39,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    },
+    "xlsx": {
+      "observations": 24,
+      "required_source_spans": 36,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 6,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 873.55,
+      "statuses": {
+        "evidence_found": 18,
+        "insufficient_relevance": 6
+      }
+    }
+  },
+  "per_split": null,
+  "per_kind": null,
+  "raw_report": "data/evaluations/context5/boundary-1200.json",
+  "raw_report_sha256": "f6b688556deb9d14a7bfbe5b24fa7994143d2ee355cc3d7ee76f0ea9935e03af"
+}

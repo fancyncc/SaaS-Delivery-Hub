@@ -1,6 +1,7 @@
 """Isolated experimental structure index. No changes to legacy vectors."""
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 from backend.vector_type import V3Vector
 
 revision='0022_rag_v3'
@@ -25,7 +26,8 @@ def upgrade():
         sa.Column('tokens',sa.Integer(),nullable=False),sa.Column('lexemes',sa.Text(),nullable=False),sa.Column('identifiers',sa.JSON(),nullable=False),sa.Column('embedding',V3Vector()))
     for name in ['rag_v3_documents','rag_v3_nodes','rag_v3_units']:
         op.create_index('ix_'+name+'_tenant_id',name,['tenant_id'])
-        if name!='rag_v3_documents': op.create_index('ix_'+name+'_document_id',name,['document_id'])
+        if name!='rag_v3_documents':
+            op.create_index('ix_'+name+'_document_id',name,['document_id'])
         if op.get_bind().dialect.name=='postgresql':
             op.execute(f"ALTER TABLE {name} ENABLE ROW LEVEL SECURITY")
             op.execute(f"ALTER TABLE {name} FORCE ROW LEVEL SECURITY")
@@ -34,4 +36,5 @@ def upgrade():
 
 
 def downgrade():
-    for name in ['rag_v3_units','rag_v3_nodes','rag_v3_documents']: op.drop_table(name)
+    for name in ['rag_v3_units','rag_v3_nodes','rag_v3_documents']:
+        op.drop_table(name)

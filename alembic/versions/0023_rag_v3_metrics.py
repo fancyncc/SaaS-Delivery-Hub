@@ -1,6 +1,8 @@
 """V3 adjacency and parsing/index duration diagnostics."""
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
+
 revision='0023_rag_v3_metrics'
 down_revision='0022_rag_v3'
 branch_labels=None

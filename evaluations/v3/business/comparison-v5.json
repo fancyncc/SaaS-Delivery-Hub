@@ -1,0 +1,544 @@
+{
+  "release_approved": false,
+  "independent_review_completed": false,
+  "scope": "project operation and public software verification; development corpus",
+  "customer_documents": false,
+  "cases_sha256": "80149b83c42a421400892af1edc77e7a752ca759f7f1f9655c9c6bb5860395a1",
+  "sources": [
+    {
+      "document": "sources/RAG_BINARY_DOCUMENTS.md",
+      "sha256": "fb7497373be5dcde3a28de79ba7383931cced9fcb0f4e51d1061fe543450a123",
+      "source_kind": "maintained_project_document",
+      "source": "docs/RAG_BINARY_DOCUMENTS.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/CONTEXT_MEMORY.md",
+      "sha256": "9d0d3c1c69e5bcaec07ce7c756b6b41e4f923d1eb7281b1d6b73b933db830331",
+      "source_kind": "maintained_project_document",
+      "source": "docs/CONTEXT_MEMORY.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/CHAT_AGENT.md",
+      "sha256": "9bee6552b0fc9db75d6b1722ba57dc5c92f328193d65637f200e0f639dfc2272",
+      "source_kind": "maintained_project_document",
+      "source": "docs/CHAT_AGENT.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/PREPRODUCTION_RUNBOOK.md",
+      "sha256": "8a4b024a012e64833f3a77405b92d0dea418631f69ff0380de5f718186b9975c",
+      "source_kind": "maintained_project_document",
+      "source": "docs/PREPRODUCTION_RUNBOOK.md",
+      "revision": "306ef05cc14b0ffe75cb811884dbffabcac225b2",
+      "license": "repository license"
+    },
+    {
+      "document": "sources/NIST.IR.8397.pdf",
+      "sha256": "cadab12c1f7b1a6a8f844d19180381211e1c29d05554bd9efb277442d8fd983d",
+      "source_kind": "public_government_publication",
+      "source": "https://nvlpubs.nist.gov/nistpubs/ir/2021/NIST.IR.8397.pdf",
+      "revision": null,
+      "license": "US government work"
+    }
+  ],
+  "before": {
+    "generated_at": "2026-09-27T10:36:27.324112+00:00",
+    "identity": {
+      "embedding": "BAAI/bge-small-zh-v1.5",
+      "embedding_revision": "7999e1d3359715c523056ef9478215996d62a620",
+      "reranker": "BAAI/bge-reranker-base",
+      "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+      "embedding_dimensions": 512,
+      "embedding_max_length": 512,
+      "query_style": "prefix",
+      "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+      "reranker_max_length": 256,
+      "reranker_max_windows": 32,
+      "feature_schema": 2,
+      "parser_schema": 4
+    },
+    "pipeline_schema": 4,
+    "implementation_sha256": {
+      "rag_v3.py": "3d4c1ba29d393262299d613adad46850972f38e24814e8bfbfe3587d9b13e68e",
+      "rag_v3_index.py": "5b2ab6ed8392752f8b182a4cc7ef40e5bde1a3a545432507bd116746969212e3",
+      "rag_v3_binary.py": "ef89ccd83ccde6332eaa567a31220469645c3557d1fff34d2c87fd1ff765d0ca",
+      "rag_v3_context.py": "b051aa6cba0405fbb31d4d01910ca5ce8c34022c58b8ce27d85a95266e8c1361",
+      "rag_v3_evidence.py": "a1280e2c3d078de251534c0e7f369c07bd980ca83c38bf035601a4c0b4f736cb",
+      "rag_v3_parse_runner.py": "6d56fccd5bc8eb5ef2a76fa896638b7f6bf40f8fe663ac4be9cafe803ce0b764",
+      "rag_v3_policy.py": "44b36d3350ab04a8b924e44c096c5ce3c4f22d89f7907a5bea38fb420bbb974a",
+      "rag_v3_release.py": "cb54481283bf9b7e4513d4861f767fc937498979c9d927be1c537446287e4ea6"
+    },
+    "metrics": {
+      "observations": 29,
+      "required_source_spans": 44,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 0.9090909090909091,
+      "noanswer_cases": 5,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 11297.7,
+      "statuses": {
+        "evidence_found": 18,
+        "budget_limited": 5,
+        "insufficient_relevance": 6
+      }
+    },
+    "per_format": {
+      "md": {
+        "observations": 23,
+        "required_source_spans": 36,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.9722222222222222,
+        "noanswer_cases": 4,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 6828.13,
+        "statuses": {
+          "evidence_found": 18,
+          "insufficient_relevance": 5
+        }
+      },
+      "pdf": {
+        "observations": 6,
+        "required_source_spans": 8,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.625,
+        "noanswer_cases": 1,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 11297.7,
+        "statuses": {
+          "budget_limited": 5,
+          "insufficient_relevance": 1
+        }
+      }
+    },
+    "per_language": {
+      "zh": {
+        "observations": 19,
+        "required_source_spans": 29,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.9655172413793104,
+        "noanswer_cases": 4,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 15995.96,
+        "statuses": {
+          "evidence_found": 14,
+          "insufficient_relevance": 5
+        }
+      },
+      "en": {
+        "observations": 10,
+        "required_source_spans": 15,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 0.8,
+        "noanswer_cases": 1,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 11297.7,
+        "statuses": {
+          "evidence_found": 4,
+          "budget_limited": 5,
+          "insufficient_relevance": 1
+        }
+      }
+    }
+  },
+  "after": {
+    "generated_at": "2026-09-28T05:18:46.126905+00:00",
+    "identity": {
+      "embedding": "BAAI/bge-small-zh-v1.5",
+      "embedding_revision": "7999e1d3359715c523056ef9478215996d62a620",
+      "reranker": "BAAI/bge-reranker-base",
+      "reranker_revision": "2cfc18c9415c912f9d8155881c133215df768a70",
+      "embedding_dimensions": 512,
+      "embedding_max_length": 512,
+      "query_style": "prefix",
+      "query_instruction": "为这个句子生成表示以用于检索相关文章：",
+      "reranker_max_length": 256,
+      "reranker_max_windows": 32,
+      "feature_schema": 2,
+      "parser_schema": 5
+    },
+    "pipeline_schema": 5,
+    "implementation_sha256": {
+      "rag_v3.py": "822e0050cd1ff6344e810e39a271a822b015b367d3ba73a18683fcef6ffa8535",
+      "rag_v3_index.py": "5b2ab6ed8392752f8b182a4cc7ef40e5bde1a3a545432507bd116746969212e3",
+      "rag_v3_binary.py": "77e42ca32b591232272a57c33c1874f6d0b5d90f7a1b23dca94d890798196fab",
+      "rag_v3_context.py": "b051aa6cba0405fbb31d4d01910ca5ce8c34022c58b8ce27d85a95266e8c1361",
+      "rag_v3_evidence.py": "52dd0ffaa4465cea1e82af47e038ad7bcce33f685ed1377421a671924dae64ce",
+      "rag_v3_parse_runner.py": "6d56fccd5bc8eb5ef2a76fa896638b7f6bf40f8fe663ac4be9cafe803ce0b764",
+      "rag_v3_policy.py": "0024c77aeaeddc1c07103225ed67198825bf215ed300485b9e9a02b2fc5c1b6b",
+      "rag_v3_release.py": "f547902c5b28a6d8f21597c5ab5ae9848381037a46612076e1a65b4f1919ed6e"
+    },
+    "metrics": {
+      "observations": 29,
+      "required_source_spans": 44,
+      "candidate_span_recall": 1.0,
+      "selected_span_coverage": 1.0,
+      "noanswer_cases": 5,
+      "noanswer_returned_evidence": 0,
+      "permission_leaks": 0,
+      "citation_errors": 0,
+      "budget_violations": 0,
+      "warm_latency_p95_ms": 22067.13,
+      "statuses": {
+        "evidence_found": 19,
+        "budget_limited": 5,
+        "insufficient_relevance": 5
+      }
+    },
+    "per_format": {
+      "md": {
+        "observations": 23,
+        "required_source_spans": 36,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 1.0,
+        "noanswer_cases": 4,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 13079.11,
+        "statuses": {
+          "evidence_found": 19,
+          "insufficient_relevance": 4
+        }
+      },
+      "pdf": {
+        "observations": 6,
+        "required_source_spans": 8,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 1.0,
+        "noanswer_cases": 1,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 30705.89,
+        "statuses": {
+          "budget_limited": 5,
+          "insufficient_relevance": 1
+        }
+      }
+    },
+    "per_language": {
+      "zh": {
+        "observations": 19,
+        "required_source_spans": 29,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 1.0,
+        "noanswer_cases": 4,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 19727.35,
+        "statuses": {
+          "evidence_found": 15,
+          "insufficient_relevance": 4
+        }
+      },
+      "en": {
+        "observations": 10,
+        "required_source_spans": 15,
+        "candidate_span_recall": 1.0,
+        "selected_span_coverage": 1.0,
+        "noanswer_cases": 1,
+        "noanswer_returned_evidence": 0,
+        "permission_leaks": 0,
+        "citation_errors": 0,
+        "budget_violations": 0,
+        "warm_latency_p95_ms": 30705.89,
+        "statuses": {
+          "evidence_found": 4,
+          "budget_limited": 5,
+          "insufficient_relevance": 1
+        }
+      }
+    }
+  },
+  "per_case": [
+    {
+      "id": "business-01",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-02",
+      "required": 3,
+      "before_covered": 3,
+      "after_covered": 3,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-03",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-04",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-05",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "budget_limited"
+    },
+    {
+      "id": "business-06",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-07",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-08",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-09",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-10",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-11",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-12",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-13",
+      "required": 1,
+      "before_covered": 0,
+      "after_covered": 1,
+      "before_returned_evidence": false,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-14",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-15",
+      "required": 3,
+      "before_covered": 3,
+      "after_covered": 3,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-16",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-17",
+      "required": 4,
+      "before_covered": 4,
+      "after_covered": 4,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-18",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-19",
+      "required": 3,
+      "before_covered": 3,
+      "after_covered": 3,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-20",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "evidence_found"
+    },
+    {
+      "id": "business-21",
+      "required": 2,
+      "before_covered": 1,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "budget_limited"
+    },
+    {
+      "id": "business-22",
+      "required": 2,
+      "before_covered": 0,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "budget_limited"
+    },
+    {
+      "id": "business-23",
+      "required": 2,
+      "before_covered": 2,
+      "after_covered": 2,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "budget_limited"
+    },
+    {
+      "id": "business-24",
+      "required": 1,
+      "before_covered": 1,
+      "after_covered": 1,
+      "before_returned_evidence": true,
+      "after_returned_evidence": true,
+      "after_status": "budget_limited"
+    },
+    {
+      "id": "business-25",
+      "required": 0,
+      "before_covered": 0,
+      "after_covered": 0,
+      "before_returned_evidence": false,
+      "after_returned_evidence": false,
+      "after_status": "insufficient_relevance"
+    },
+    {
+      "id": "business-26",
+      "required": 0,
+      "before_covered": 0,
+      "after_covered": 0,
+      "before_returned_evidence": false,
+      "after_returned_evidence": false,
+      "after_status": "insufficient_relevance"
+    },
+    {
+      "id": "business-27",
+      "required": 0,
+      "before_covered": 0,
+      "after_covered": 0,
+      "before_returned_evidence": false,
+      "after_returned_evidence": false,
+      "after_status": "insufficient_relevance"
+    },
+    {
+      "id": "business-28",
+      "required": 0,
+      "before_covered": 0,
+      "after_covered": 0,
+      "before_returned_evidence": false,
+      "after_returned_evidence": false,
+      "after_status": "insufficient_relevance"
+    },
+    {
+      "id": "business-29",
+      "required": 0,
+      "before_covered": 0,
+      "after_covered": 0,
+      "before_returned_evidence": false,
+      "after_returned_evidence": false,
+      "after_status": "insufficient_relevance"
+    }
+  ],
+  "raw_report_sha256": {
+    "before": "66c2ad3da18fa2e9c8ec5996978ec2f24d4e5141a81b8690953298a76f3901f3",
+    "after": "626ebdb3a4daa34716720efb727ca7dabe779fed3edb5a1c979ce351205c893a"
+  }
+}

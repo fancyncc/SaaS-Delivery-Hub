@@ -15,12 +15,11 @@
     "xlsx"
   ],
   "failures": [
-    "Independent review and customer-source annotations are pending; source-backed labels remain agent drafts",
-    "Calibrated paired older-baseline and independently approved locked validation are not complete",
-    "Relevance classifier has not been trained on independently reviewed calibration labels",
-    "Current parser/pipeline 4 rules-mode synthetic coverage is 62.3%; only TXT reaches 90%",
-    "Source-pinned development coverage is 90.9% overall but PDF alone is 62.5%; three questions remain incomplete",
-    "Historical multilingual comparison used parser/pipeline 3; current code requires a new reviewed comparison"
+    "Independent human review of the source labels and selected evidence is pending",
+    "A locked validation set built from representative customer documents is pending",
+    "A paired independently reviewed model comparison for pipeline 5 is pending",
+    "Generated-answer faithfulness, contradiction rate, completeness, and real no-answer behavior are not formally scored",
+    "Standard Recall@3/5, MRR, and nDCG@5 still require complete graded relevance labels"
   ],
   "smoke_test": {
     "real_services": true,
@@ -37,7 +36,9 @@
     "boundary": "evaluations/v3/local_boundary_observations.json",
     "models": "evaluations/v3/local_model_comparison.json",
     "context4": "evaluations/v3/local_context_observations.json",
-    "source_backed": "evaluations/v3/business/comparison.json"
+    "source_backed": "evaluations/v3/business/comparison.json",
+    "context5": "evaluations/v3/local_context5_observations.json",
+    "source_backed_pipeline5": "evaluations/v3/business/comparison-v5.json"
   },
   "operational_runs": {
     "demo": 120,
@@ -45,10 +46,24 @@
     "multilingual_boundary": 192,
     "context4_boundary": 192,
     "source_backed_before": 29,
-    "source_backed_deployed": 29
+    "source_backed_deployed": 29,
+    "context5_boundary": 192,
+    "source_backed_pipeline5": 29
   },
   "operational_model_comparison_completed": true,
-  "current_pipeline_schema": 4,
+  "current_pipeline_schema": 5,
+  "latest_measured_pipeline_schema": 5,
+  "candidate_pipeline_validation": {
+    "relevant_tests_passed": 94,
+    "full_backend_tests_passed": 354,
+    "full_backend_tests_skipped": 4,
+    "ruff_passed": true,
+    "powershell_syntax_passed": true,
+    "frontend_typecheck_passed": true,
+    "frontend_build_passed": true,
+    "docker_deployed": true,
+    "real_model_evaluated": true
+  },
   "source_backed_questions": 29,
   "real_customer_documents": false
 }

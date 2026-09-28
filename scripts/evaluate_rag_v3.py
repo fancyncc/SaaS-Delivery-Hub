@@ -2,8 +2,9 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import sys
+from pathlib import Path
+
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from backend.rag_v3_evaluation import calibrate, evaluate
 
@@ -19,9 +20,11 @@ def main():
     parser.add_argument('--output',required=True)
     args=parser.parse_args()
     rows=read(args.runs)
-    if args.action=='calibrate': output=calibrate(rows)
+    if args.action=='calibrate':
+        output=calibrate(rows)
     else:
-        cases=read(args.cases); output=evaluate(cases,rows)
+        cases=read(args.cases)
+        output=evaluate(cases,rows)
         output.update(question_count=len(cases),formats=sorted({c['format'] for c in cases}),
             domain_count=len({c['domain'] for c in cases}),
             cases_sha256=hashlib.sha256(Path(args.cases).read_bytes()).hexdigest(),
@@ -32,4 +35,5 @@ def main():
     print(args.output)
 
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+    main()

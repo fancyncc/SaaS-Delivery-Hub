@@ -1,0 +1,66 @@
+{
+  "checked_at": "2026-09-28T13:24:05.853794+08:00",
+  "scope": "Pipeline 5 local Docker release and real-model evaluation",
+  "docker_context": "desktop-linux",
+  "docker_client_available": true,
+  "docker_engine_available": true,
+  "docker_desktop": {
+    "version": "4.92.0.240144",
+    "engine_version": "29.8.0",
+    "backend_running": true
+  },
+  "deployment": {
+    "workspace_backend_built": true,
+    "containers_recreated": true,
+    "schema_revision": "0029_task_review_workflow",
+    "verified_backup": {
+      "name": "saas_chat_rag_20260913-20260928-130224.dump",
+      "bytes": 2742334,
+      "restore_validation_passed": true
+    },
+    "v3_indexes_rebuilt": true,
+    "v3_ready_current": 46,
+    "v3_failed": 0,
+    "v3_total": 46,
+    "real_model_evaluation_completed": true,
+    "v3_identity": "v3-structure-1:ce482e787de286ef7caf2360b8bfeecb",
+    "knowledge_documents": 47
+  },
+  "endpoints": {
+    "api_ready": true,
+    "web_status": 200,
+    "retrieval_ready": true,
+    "real_models_verified": true,
+    "retrieval_queue_depth": 0
+  },
+  "queues": {
+    "worker_queue": "celery",
+    "indexer_queue": "indexing",
+    "online_consumers": 2,
+    "beat_instances": 1
+  },
+  "evaluation": {
+    "pipeline_schema": 5,
+    "source_backed_questions": 29,
+    "source_required_spans": 44,
+    "source_selected_coverage": 1.0,
+    "boundary_questions": 192,
+    "boundary_required_spans": 318,
+    "boundary_selected_coverage": 1.0,
+    "pdf_required_spans": 36,
+    "pdf_selected_coverage": 1.0,
+    "noanswer_returned_evidence": 0,
+    "permission_leaks": 0,
+    "citation_errors": 0,
+    "budget_violations": 0
+  },
+  "runtime_ready": true,
+  "local_technical_acceptance_passed": true,
+  "formal_rag_quality_approved": false,
+  "formal_blockers": [
+    "Independent human review of labels and evidence is not complete",
+    "A locked customer-source validation set is not complete",
+    "Current pipeline 5 has not undergone a paired independently reviewed model comparison",
+    "Generated-answer faithfulness and answer quality have not been formally scored"
+  ]
+}

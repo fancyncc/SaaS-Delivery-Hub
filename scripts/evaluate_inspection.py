@@ -59,8 +59,10 @@ async def main():
             scope = [] if case['scope']=='company_only' else [manifest['project_id']]
             result = await inspect(session, manifest['tenant_id'], case['question'], scope, 1200, threshold=threshold)
         surviving = {h['id'] for h in result['diagnostics']['candidates'] if h['rerank_score']>=threshold}
-        totals['gold'] += len(record['gold_ids']); totals['recalled'] += len(set(record['gold_ids']) & surviving)
-        totals['facts'] += len(case['required_spans']); totals['old_facts'] += record['old_coverage']
+        totals['gold'] += len(record['gold_ids'])
+        totals['recalled'] += len(set(record['gold_ids']) & surviving)
+        totals['facts'] += len(case['required_spans'])
+        totals['old_facts'] += record['old_coverage']
         totals['new_facts'] += coverage(case['required_spans'],result['chunks'])
         totals['over_budget'] += result['diagnostics']['final_tokens']>1200
         totals['leaks'] += case['scope']=='company_only' and any(h['document_id'] in {d['id'] for d in manifest['documents']} for h in [*result['chunks'], *result['diagnostics']['candidates']])
