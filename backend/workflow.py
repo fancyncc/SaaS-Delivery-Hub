@@ -112,7 +112,7 @@ async def advance_legacy(session: AsyncSession, run: AgentRun, *, one_node: bool
                 extracted = await structured("提取实施需求，source 必须标识客户原文", {"requirements": project.requirements_text}, ExtractedRequirements)
                 state.requirements = extracted.requirements
                 state.requirements.append(RequirementSpec(category="original", statement=project.requirements_text))
-            detail = {"count": len(state.requirements), "agent": "Requirement Agent", "prompt_version": PROMPT_VERSION, "mode": get_settings().model_mode}
+            detail = {"count": len(state.requirements), "agent": "requirement_analyzer", "prompt_version": PROMPT_VERSION, "mode": get_settings().model_mode}
         elif node == "retrieve_product_knowledge":
             query = " ".join(r.statement for r in state.requirements)
             detail = {"citations": await retrieve(session, project.tenant_id, query, project_ids=[project.id])}

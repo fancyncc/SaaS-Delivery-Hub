@@ -58,7 +58,7 @@ const waitingForApproval = computed(() => run.value?.status === 'waiting_approva
 const progressMessage = computed(() => {
   if (!run.value || !waitingForApproval.value) return ''
   const node = nodeNames[run.value.current_node] || run.value.current_node
-  return `流程已推进到第 ${progressedNodeCount.value} / 17 个节点，当前暂停等待“${node}”。批准后 Agent 会自动继续，遇到下一个审批门时会再次暂停。`
+  return `流程已推进到第 ${progressedNodeCount.value} / 17 个节点，当前暂停等待“${node}”。批准后实施流程会自动继续，遇到下一个审批门时会再次暂停。`
 })
 const canCancel = computed(() => run.value?.allowed_actions?.includes('cancel'))
 const statusNames: Record<string,string> = { blocked:'等待处理', preparing_materials:'等待成员材料', pending:'等待执行', running:'执行中', waiting_approval:'等待审批', failed:'执行终止', succeeded:'执行成功', cancelled:'已取消' }
@@ -122,12 +122,12 @@ async function decide(item: Approval, decision: 'approved'|'rejected') {
   if (decision === 'rejected' && !decisionComment.value.trim()) { error.value = '驳回时必须填写原因，便于项目团队修订。'; return }
   try {
     await api(`/api/approvals/${item.id}/decision`, { method:'POST', headers:writeHeaders(), body:JSON.stringify({ decision, comment:decisionComment.value.trim(), expected_version:item.version }) })
-    decisionComment.value = ''; message.value = decision === 'approved' ? '审批已通过，Agent 已继续执行。' : '审批已驳回，项目已标记。'
+    decisionComment.value = ''; message.value = decision === 'approved' ? '审批已通过，实施流程已继续执行。' : '审批已驳回，项目已标记。'
     await load()
   } catch (e:any) { error.value = e.message }
 }
 async function cancelRun() {
-  if (!run.value || !window.confirm(`确定取消 Run #${run.value.run_number} 吗？项目将进入阻塞状态，可随后创建重试 Run。`)) return
+  if (!run.value || !window.confirm(`确定取消第 #${run.value.run_number} 次实施执行吗？项目将进入阻塞状态，可随后启动整改流程。`)) return
   error.value = ''; message.value = ''
   try {
     await api(`/api/runs/${run.value.id}/cancel`, { method:'POST', headers:writeHeaders() })
@@ -146,11 +146,11 @@ onBeforeUnmount(() => eventSource?.close())
 
 <template>
   <main class="run-page page-wrap">
-    <div class="run-page-nav"><router-link class="back-link" to="/app">← 返回实施项目</router-link><router-link class="trace-link" :to="`/app/runs/${runId}/trace`">查看执行 Trace</router-link></div>
+    <div class="run-page-nav"><router-link class="back-link" to="/app">← 返回实施项目</router-link><router-link class="trace-link" :to="`/app/runs/${runId}/trace`">查看执行追踪</router-link></div>
     <p v-if="error" class="alert alert-danger">{{error}}</p><p v-if="message" class="alert alert-success">{{message}}</p>
     <section v-if="run && project" class="run-hero">
-      <div><span class="eyebrow">AGENT RUN #{{run.run_number}} · {{run.id.slice(0,8)}}</span><h1>{{project.name}}</h1><p>{{project.customer_name}} · {{project.document?.employee_count || '—'}} 人 · 目标上线 {{project.document?.target_go_live_date || '未填写'}}</p></div>
-      <div class="run-status"><span :class="`run-status-${run.status}`">{{statusNames[run.status] || run.status}}</span><strong>{{nodeNames[run.current_node] || run.current_node}}</strong><small>Trace {{run.trace_id}}</small><button v-if="canCancel" class="secondary danger-text" @click="cancelRun">取消本次 Run</button></div>
+      <div><span class="eyebrow">DELIVERY #{{run.run_number}} · {{run.id.slice(0,8)}}</span><h1>{{project.name}}</h1><p>{{project.customer_name}} · {{project.document?.employee_count || '—'}} 人 · 目标上线 {{project.document?.target_go_live_date || '未填写'}}</p></div>
+      <div class="run-status"><span :class="`run-status-${run.status}`">{{statusNames[run.status] || run.status}}</span><strong>{{nodeNames[run.current_node] || run.current_node}}</strong><small>追踪 ID {{run.trace_id}}</small><button v-if="canCancel" class="secondary danger-text" @click="cancelRun">取消本次执行</button></div>
     </section>
 
     <AgentProgress v-if="run" :run="run" @refresh="load" />
@@ -172,10 +172,10 @@ onBeforeUnmount(() => eventSource?.close())
 
     <div v-if="run" class="run-layout">
       <section class="panel execution-panel">
-        <div class="section-heading"><div><span class="step-number">01</span><div><h2>Agent 执行轨迹</h2><p>节点完成后写入数据库，可在中断后恢复。</p></div></div><span class="live-indicator"><i></i>实时同步</span></div>
+        <div class="section-heading"><div><span class="step-number">01</span><div><h2>实施执行轨迹</h2><p>节点完成后写入数据库，可在中断后恢复。</p></div></div><span class="live-indicator"><i></i>实时同步</span></div>
         <div class="timeline">
           <div v-for="(step,index) in steps" :key="step.id" class="timeline-item" :class="step.node === run.current_node && waitingForApproval ? 'current' : 'completed'"><span class="timeline-index">{{String(index+1).padStart(2,'0')}}</span><div><div class="timeline-title"><strong>{{nodeNames[step.node] || step.node}}</strong><span>{{step.node === run.current_node && waitingForApproval ? '等待审批' : '已完成'}}</span></div><small>{{new Date(step.created_at).toLocaleString()}}</small><div v-if="Object.keys(step.detail || {}).length" class="step-detail"><code>{{JSON.stringify(step.detail,null,2)}}</code></div></div></div>
-          <div v-if="!['succeeded','failed','cancelled'].includes(run.status)" class="timeline-item current"><span class="timeline-index">→</span><div><div class="timeline-title"><strong>{{nodeNames[run.current_node] || run.current_node}}</strong><span>当前节点</span></div><small>{{run.status === 'waiting_approval' ? '等待人工审批后继续' : 'Agent 正在处理'}}</small></div></div>
+          <div v-if="!['succeeded','failed','cancelled'].includes(run.status)" class="timeline-item current"><span class="timeline-index">→</span><div><div class="timeline-title"><strong>{{nodeNames[run.current_node] || run.current_node}}</strong><span>当前节点</span></div><small>{{run.status === 'waiting_approval' ? '等待人工审批后继续' : '实施流程正在处理'}}</small></div></div>
         </div>
       </section>
 

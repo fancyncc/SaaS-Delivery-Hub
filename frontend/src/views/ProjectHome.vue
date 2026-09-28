@@ -82,7 +82,7 @@ async function createProject() {
     assistingCompanyId.value = ''
     success.value = hasAssistingCompany
       ? '实施项目已创建，协助公司确认后即可参与项目。'
-      : '实施项目已创建，可以在下方项目列表中启动 Agent。'
+      : '实施项目已创建，可以在下方项目列表中启动实施流程。'
     await refresh()
   } catch (e: any) { error.value = e.message } finally { loading.value = false }
 }
@@ -123,7 +123,7 @@ onMounted(async () => {
     <p v-if="error" class="alert alert-danger">{{error}}</p><p v-if="success" class="alert alert-success">{{success}}</p>
 
     <section v-if="auth.user?.company_role_code === 'company_admin' && showCreate" id="new-project" class="panel intake-panel">
-      <div class="section-heading"><div><span class="step-number">01</span><div><h2>新建实施项目</h2><p>带 <b class="required">*</b> 的字段为 Agent 启动前必须确认的信息。</p></div></div><span class="skill-note">遵循项目文书 Skill 规范</span></div>
+      <div class="section-heading"><div><span class="step-number">01</span><div><h2>新建实施项目</h2><p>带 <b class="required">*</b> 的字段为实施流程启动前必须确认的信息。</p></div></div><span class="skill-note">遵循项目文书 Skill 规范</span></div>
       <form @submit.prevent="createProject">
         <div class="form-section"><h3>项目与客户</h3><div class="form-grid cols-2">
           <label><span>项目名称 <b>*</b></span><input v-model.trim="form.name" required minlength="2" placeholder="如：星河设计客户上线实施"><small>建议包含客户名和实施目标</small></label>
@@ -148,7 +148,7 @@ onMounted(async () => {
           <label><span>验收标准 <em>选填</em></span><textarea v-model.trim="form.acceptance_criteria" placeholder="如：80 名成员全部导入、权限抽查通过、关键模板可正常使用"></textarea></label>
           <label class="wide"><span>约束、风险与备注 <em>选填</em></span><textarea v-model.trim="form.notes" placeholder="记录审批依赖、时间约束、特殊风险或待确认问题"></textarea></label>
         </div></div>
-        <div class="form-actions"><p>提交后项目先进入“待启动”，Agent 不会自动执行。</p><button class="primary" type="submit" :disabled="loading">{{loading ? '创建中…' : '创建实施项目'}}</button></div>
+        <div class="form-actions"><p>提交后项目先进入“待启动”，实施流程不会自动启动。</p><button class="primary" type="submit" :disabled="loading">{{loading ? '创建中…' : '创建实施项目'}}</button></div>
       </form>
     </section>
 
@@ -159,13 +159,13 @@ onMounted(async () => {
       <div v-else class="project-list">
         <article v-for="project in filteredProjects" :key="project.id" class="project-card" :class="`project-${meta(project.lifecycle_status).tone}`">
           <button v-if="project.permissions?.includes('project.delete')" class="delete-project-button" @click="removeProject(project)">删除项目</button>
-          <div class="project-main"><div class="project-top"><span class="status-pill" :class="`pill-${meta(project.lifecycle_status).tone}`"><i></i>{{meta(project.lifecycle_status).label}}</span><span v-if="project.execution_status" class="project-id">Run #{{project.latest_run?.run_number}} · {{executionMeta[project.execution_status] || project.execution_status}}</span><span class="project-id">#{{project.id.slice(0,8)}}</span></div><h3>{{project.name}}</h3><p class="customer">{{project.customer_name}}</p><div v-if="project.document" class="project-meta"><span>{{project.document.employee_count}} 人</span><span>计划 {{project.document.target_go_live_date}} 上线</span></div>
+          <div class="project-main"><div class="project-top"><span class="status-pill" :class="`pill-${meta(project.lifecycle_status).tone}`"><i></i>{{meta(project.lifecycle_status).label}}</span><span v-if="project.execution_status" class="project-id">执行 #{{project.latest_run?.run_number}} · {{executionMeta[project.execution_status] || project.execution_status}}</span><span class="project-id">#{{project.id.slice(0,8)}}</span></div><h3>{{project.name}}</h3><p class="customer">{{project.customer_name}}</p><div v-if="project.document" class="project-meta"><span>{{project.document.employee_count}} 人</span><span>计划 {{project.document.target_go_live_date}} 上线</span></div>
             <div v-if="project.lifecycle_status === 'blocked'" class="rejection-box"><strong>项目已阻塞</strong><p>{{project.latest_approval?.comment || '请进入执行详情查看失败原因并修订后重试。'}}</p></div>
           </div>
           <div class="project-actions">
             <router-link class="primary" :to="`/app/projects/${project.id}`">查看详情</router-link>
             <button v-if="project.latest_run" class="secondary" @click="openRun(project)">{{project.lifecycle_status === 'completed' ? '查看实施结果' : project.lifecycle_status === 'blocked' ? '查看阻塞详情' : '查看执行进度'}}</button>
-            <button v-if="project.can_start" class="primary" @click="start(project)">{{project.lifecycle_status === 'blocked' ? '创建重试 Run' : '启动 Agent'}}</button>
+            <button v-if="project.can_start" class="primary" @click="start(project)">{{project.lifecycle_status === 'blocked' ? '启动整改流程' : '启动实施流程'}}</button>
           </div>
         </article>
       </div>

@@ -10,7 +10,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parents[1] / ".env", extra="ignore")
 
-    app_name: str = "SaaS Implementation Agent"
+    app_name: str = "SaaS Delivery Hub"
     database_url: str = "sqlite+aiosqlite:///./saas_agent.db"
     migration_database_url: str = ""
     app_db_user: str = "saas_app"

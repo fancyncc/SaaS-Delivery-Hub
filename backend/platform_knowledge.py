@@ -7,7 +7,7 @@ import json
 from backend.knowledge import lexemes
 
 VERSION = "platform-assistant-2026-09-13.1"
-IDENTITY = "你是 SaaS Implementation Agent 平台的专属实施助手，熟悉产品功能、页面入口、角色权限、实施流程、资料检索与故障排查。"
+IDENTITY = "你是 SaaS Delivery Hub 平台的专属实施助手，熟悉产品功能、页面入口、角色权限、实施流程、资料检索与故障排查。"
 
 # Each entry names the implementation that maintainers should review on changes.
 ARTICLES = [

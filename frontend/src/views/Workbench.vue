@@ -52,7 +52,7 @@ async function reindex(id:string) {
 <template><main class="page-wrap workspace-workbench">
   <header class="workspace-heading"><div><span class="eyebrow">WORKSPACE HUB</span><h1>待办与知识库</h1><p>处理当前任务，沉淀每一次实施经验。</p></div><router-link class="secondary" to="/app">返回实施项目 →</router-link></header>
   <div v-if="error" class="alert alert-danger" role="alert">{{error === 'Failed to fetch' ? '暂时无法连接服务，请检查连接后重试。' : error}} <button class="secondary" @click="load">重新加载</button></div>
-  <section class="panel"><h1>我的待办</h1><p v-if="!tasks.length">暂无需要你处理的任务。</p><article v-for="t in tasks" :key="t.run_id"><router-link :to="`/app/runs/${t.run_id}`">{{t.project_name}} · {{taskNames[t.current_node] || t.current_node}}</router-link><small>Run #{{t.run_number}} · {{statusNames[t.status] || t.status}}</small><p>{{t.reason || (t.status === 'waiting_approval' ? '请完成审批后继续执行' : '需要整改或补充材料')}}</p></article></section>
+  <section class="panel"><h1>我的待办</h1><p v-if="!tasks.length">暂无需要你处理的任务。</p><article v-for="t in tasks" :key="t.run_id"><router-link :to="`/app/runs/${t.run_id}`">{{t.project_name}} · {{taskNames[t.current_node] || t.current_node}}</router-link><small>实施执行 #{{t.run_number}} · {{statusNames[t.status] || t.status}}</small><p>{{t.reason || (t.status === 'waiting_approval' ? '请完成审批后继续执行' : '需要整改或补充材料')}}</p></article></section>
   <section class="panel"><h2>公司知识库</h2><p>仅使用有授权的资料。相同标题发布新版本时版本号必须递增。</p>
     <form v-if="auth.isCompanyAdmin" @submit.prevent="upload" class="form-grid cols-2">
       <label class="knowledge-wide">适用范围<select v-model="form.project_id"><option :value="null">公司通用（公司成员可检索）</option><option v-for="p in projects" :key="p.id" :value="p.id">{{p.name}}</option></select></label>

@@ -47,7 +47,7 @@ const display = (value:any):string => value==null?'未设置':typeof value==='bo
     <section class="material-content" aria-live="polite">
       <template v-if="section==='requirements'">
         <div class="content-heading"><h3>客户需求与能力差距</h3><span>保留客户原始诉求，逐项确认产品能力</span></div>
-        <div v-if="!state.requirements?.length" class="delivery-empty"><strong>需求尚未提取</strong><p>Agent 完成需求分析后，具体需求和差距会显示在这里。</p></div>
+        <div v-if="!state.requirements?.length" class="delivery-empty"><strong>需求尚未提取</strong><p>实施流程完成需求分析后，具体需求和差距会显示在这里。</p></div>
         <div v-else class="requirement-grid"><article v-for="(r,i) in requirements" :key="i" class="requirement-card"><div><span class="item-index">{{String(Number(i)+1).padStart(2,'0')}}</span><span class="subtle-badge">{{r.count>1?`${r.count} 条相同表达已合并展示`:(labels[r.priority] || r.priority)}}</span></div><p>{{r.statement}}</p></article></div>
         <div v-if="gaps.length" class="gap-list"><article v-for="(g,i) in gaps" :key="i"><span class="subtle-badge" :class="{'warning-badge':g.fit!=='supported'}">{{labels[g.fit] || g.fit}}</span><div><strong>{{g.requirement}}</strong><p>{{g.recommendation}}</p><small v-if="g.evidence_ids?.length">证据：{{g.evidence_ids.join(' · ')}}</small></div></article></div>
       </template>

@@ -19,12 +19,12 @@ async function logout() { await auth.logout(); await router.push('/login') }
   <div class="app-shell" :class="{ 'chat-shell': route.name === 'chat' }">
     <header class="app-header">
       <router-link class="brand" :to="auth.isPlatform ? '/platform' : '/app'">
-        <span class="brand-mark">A</span>
-        <span><small>SAAS AGENT</small><strong>SaaS 实施工作台</strong></span>
+        <span class="brand-mark">D</span>
+        <span><small>SAAS DELIVERY HUB</small><strong>SaaS 交付中枢</strong></span>
       </router-link>
       <div class="header-context">
         <span class="system-dot"></span><span>系统运行正常</span>
-        <span v-if="route.name === 'run'" class="context-divider">Agent 执行空间</span>
+        <span v-if="route.name === 'run'" class="context-divider">实施执行空间</span>
         <template v-if="auth.user">
           <router-link v-if="!auth.isPlatform" class="header-link" to="/app">项目管理</router-link>
           <router-link v-if="!auth.isPlatform" class="header-link" to="/app/chat">AI 助手</router-link>

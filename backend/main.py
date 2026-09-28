@@ -419,9 +419,9 @@ async def start_run(project_id: UUID, request: Request, key: str = Depends(idemp
     await session.execute(select(Project.id).where(Project.id == project.id).with_for_update())
     latest_run = await session.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.tenant_id == project.tenant_id).order_by(AgentRun.run_number.desc()).limit(1))
     if project.lifecycle_status in {"completed", "cancelled", "archived"}:
-        raise HTTPException(409, "已完成的项目不能再次启动 Agent")
+        raise HTTPException(409, "已完成的项目不能再次启动实施流程")
     if latest_run and latest_run.status in {"pending", "running", "waiting_approval", "preparing_materials", "blocked"}:
-        raise HTTPException(409, "该项目已有进行中的 Agent，请进入执行详情查看")
+        raise HTTPException(409, "该项目已有进行中的实施流程，请进入执行详情查看")
     transition_project(project, ProjectLifecycle.IN_PROGRESS)
     next_run_number = (await session.scalar(
         select(func.max(AgentRun.run_number)).where(AgentRun.project_id == project.id)

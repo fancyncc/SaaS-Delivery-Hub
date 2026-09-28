@@ -17,8 +17,8 @@ function download() {
 }
 onMounted(load)
 </script>
-<template><main class="page-wrap"><router-link :to="`/app/runs/${id}`">← 返回实施 Run</router-link><p v-if="error" class="alert alert-danger">{{error}}</p>
-  <section v-if="run" class="panel"><h1>执行 Trace</h1><p><code>{{run.trace_id}}</code></p><p>Run #{{run.run_number}} · {{run.status}} · 当前节点 {{run.current_node}}</p><router-link v-if="run.retry_of_run_id" :to="`/app/runs/${run.retry_of_run_id}`">查看整改前的 Run</router-link><p>以下为数据库持久化节点记录，时间为记录创建时间，不是节点耗时；跨 Worker 分布式 Span 尚未在此聚合。</p><button class="secondary" @click="load">刷新轨迹</button><button class="secondary" @click="download">下载 Trace JSON</button><label>筛选节点或状态<input v-model="filter" placeholder="输入节点名称或状态"></label>
+<template><main class="page-wrap"><router-link :to="`/app/runs/${id}`">← 返回实施执行</router-link><p v-if="error" class="alert alert-danger">{{error}}</p>
+  <section v-if="run" class="panel"><h1>执行追踪</h1><p><code>{{run.trace_id}}</code></p><p>实施执行 #{{run.run_number}} · {{run.status}} · 当前节点 {{run.current_node}}</p><router-link v-if="run.retry_of_run_id" :to="`/app/runs/${run.retry_of_run_id}`">查看整改前的执行</router-link><p>以下为数据库持久化节点记录，时间为记录创建时间，不是节点耗时；跨 Worker 分布式 Span 尚未在此聚合。</p><button class="secondary" @click="load">刷新轨迹</button><button class="secondary" @click="download">下载追踪 JSON</button><label>筛选节点或状态<input v-model="filter" placeholder="输入节点名称或状态"></label>
     <p v-if="!visible.length">暂无匹配的节点记录。</p><article v-for="step in visible" :key="step.id"><h2>{{step.sequence}}. {{step.node}}</h2><p>{{step.status}} · {{new Date(step.created_at).toLocaleString()}}</p><details><summary>节点执行详情</summary><pre>{{JSON.stringify(step.detail,null,2)}}</pre></details></article>
   </section>
 </main></template>

@@ -19,9 +19,9 @@ def mount_frontend(app: FastAPI) -> None:
             raise HTTPException(404, "Not Found")
         if not (dist / "index.html").is_file():
             return HTMLResponse(
-                '<html lang="zh-CN"><meta charset="utf-8"><title>SaaS Agent</title>'
+                '<html lang="zh-CN"><meta charset="utf-8"><title>SaaS Delivery Hub</title>'
                 '<body style="font-family:sans-serif;max-width:640px;margin:80px auto;padding:24px">'
-                '<h1>SaaS Agent</h1><p>后端已启动，应用页面尚未构建。</p>'
+                '<h1>SaaS Delivery Hub</h1><p>后端已启动，应用页面尚未构建。</p>'
                 '<p>请在项目根目录运行 <code>.\\start.ps1</code>，自动准备并启动应用。</p>'
                 '<a href="/docs">查看接口文档</a></body></html>', status_code=503,
             )
