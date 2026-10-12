@@ -48,3 +48,24 @@ def test_postgres_migration_contains_rls_and_cascade(monkeypatch):
     assert sql.count("FORCE ROW LEVEL SECURITY") == 2
     assert sql.count("CREATE POLICY tenant_isolation") == 2
     assert sql.count("ON DELETE CASCADE") == 2
+
+
+def test_maintenance_migration_preserves_rows_and_handles_fresh_bootstrap(monkeypatch):
+    from sqlalchemy import text
+    spec = importlib.util.spec_from_file_location("maintenance_migration", Path("alembic/versions/0033_context_maintenance.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    engine = create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.execute(text("CREATE TABLE chat_context_tasks (conversation_id VARCHAR(36) PRIMARY KEY, status VARCHAR(24))"))
+        connection.execute(text("CREATE TABLE chat_history_migrations (conversation_id VARCHAR(36) PRIMARY KEY, turn_count INTEGER)"))
+        connection.execute(text("INSERT INTO chat_context_tasks VALUES ('private-chat', 'failed')"))
+        connection.execute(text("INSERT INTO chat_history_migrations VALUES ('private-chat', 123)"))
+        monkeypatch.setattr(module, "op", Operations(MigrationContext.configure(connection)))
+        module.upgrade()
+        module.upgrade()
+        assert connection.execute(text("SELECT status, queued_at FROM chat_context_tasks")).one() == ("failed", 0)
+        assert connection.execute(text("SELECT turn_count, index_status FROM chat_history_migrations")).one() == (123, "pending")
+        module.downgrade()
+        assert connection.execute(text("SELECT turn_count FROM chat_history_migrations")).scalar_one() == 123
+    engine.dispose()

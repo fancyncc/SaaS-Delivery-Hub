@@ -208,9 +208,9 @@ async def test_invalid_remote_token_counts_fail(monkeypatch):
 
 async def test_api_budget_validation(client, monkeypatch):
     async def inspect(*args):
-        return {"pipeline": "v3", "status": "index_unavailable", "chunks": [], "evidence_text": ""}
+        return {"pipeline": "retrieval", "status": "index_unavailable", "chunks": [], "evidence_text": ""}
 
-    monkeypatch.setattr("backend.rag_v3.inspect", inspect)
+    monkeypatch.setattr("backend.knowledge_retrieval.inspect", inspect)
     response = await client.post(
         "/api/knowledge/inspect", json={"question": "项目工单字段", "evidence_budget": 1200}
     )

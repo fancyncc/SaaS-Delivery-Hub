@@ -11,20 +11,16 @@
 credentials*.json
 secrets*.json
 
-# Private or internal documentation
+# Maintained project documentation (eight topic files)
 docs/*
-!docs/AGENT_RAG.md
-!docs/RAG_CPU.md
-!docs/RAG_BINARY_DOCUMENTS.md
-!docs/CHAT_AGENT.md
-!docs/CONTEXT_MEMORY.md
-!docs/PROJECT_COLLABORATION.md
-!docs/AI_CHAT.md
-!docs/DELIVERY_IMPLEMENTATION.md
-!docs/PREPRODUCTION_RUNBOOK.md
-!docs/CPU_PREPRODUCTION_ACCEPTANCE.md
-!docs/OPEN_REGISTRATION.md
-!docs/REPOSITORY_LAYOUT.md
+!docs/agent.md
+!docs/api.md
+!docs/architecture.md
+!docs/data_pipeline.md
+!docs/deployment.md
+!docs/evaluation_report.md
+!docs/rag.md
+!docs/testing.md
 
 # Python environments, caches and build artifacts
 .venv/
@@ -60,7 +56,6 @@ pip-wheel-metadata/
 backups/
 data/
 uploads/
-knowledge/models/
 logs/
 *.log
 

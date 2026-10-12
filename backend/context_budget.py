@@ -65,6 +65,14 @@ def count_tokens(value: Any) -> TokenCount:
     return TokenCount(sum(1 if ord(c) < 128 else 4 for c in text), "estimated")
 
 
+def tokenizer_status():
+    s = get_settings()
+    model = s.llm_local_model if s.llm_mode == "local" else s.model_name
+    spec = s.model_tokenizer_map.get(model, s.model_tokenizer)
+    return {"method": "tokenizer" if spec and tokenizer(spec) is not None else "estimated",
+        "configured": bool(spec)}
+
+
 def input_limit(max_output=None, *, agent=False):
     s = get_settings()
     output = s.model_max_output_tokens if max_output is None else max_output
@@ -173,7 +181,9 @@ class ContextBundle:
                 block.selected, block.reason = True, "included"
                 remaining -= block.tokens
             elif block.required:
-                raise HTTPException(422, "尚未压缩的对话或必要信息超过预算，请等待压缩完成或缩小输入")
+                if block.category in {"state", "required", "question"}:
+                    raise HTTPException(422, "当前问题或必要约束超过上下文预算，请缩小输入或提高模型预算；等待压缩不会解决此问题")
+                raise HTTPException(422, "尚未压缩的对话超过预算，请检查会话维护状态并重试压缩")
             else:
                 block.reason = "token_budget"
                 TRIMMED.labels(block.category).inc()

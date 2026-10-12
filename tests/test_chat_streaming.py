@@ -121,7 +121,10 @@ async def test_native_tool_protocol_and_fixed_scope(monkeypatch):
         calls.append(arguments)
         return [{"id": "source", "text": "验收资料"}]
     monkeypatch.setattr(chat_tools, "call_tool", tool)
-    observations = [item async for item in chat_tools.tool_context(None, SimpleNamespace(id="fixed"), None, "XL-10要求", {})]
+    async def authorize(*args, **kwargs):
+        assert kwargs["version"] == 1
+    monkeypatch.setattr("backend.chat_mcp.authorized_conversation", authorize)
+    observations = [item async for item in chat_tools.tool_context(None, SimpleNamespace(id="fixed", version=1), None, "XL-10要求", {})]
     assert len(observations) == 1 and len(requests) == 2
     assert calls[0]['conversation_id'] == 'fixed' and 'XL-10' in calls[0]['query']
 
@@ -146,7 +149,7 @@ async def test_gateway_ignoring_tools_uses_original_authorized_query(monkeypatch
         calls.append((name, arguments))
         return [{'id': 'authorized-source'}]
     monkeypatch.setattr(chat_tools, 'call_tool', tool)
-    observations = [item async for item in chat_tools.tool_context(None, SimpleNamespace(id='fixed'), None, 'XL-107项目状态', {})]
+    observations = [item async for item in chat_tools.tool_context(None, SimpleNamespace(id='fixed', version=1), None, 'XL-107项目状态', {})]
     assert calls == [('search_authorized_context', {'conversation_id': 'fixed', 'query': 'XL-107项目状态'})]
     assert len(requests) == 1 and requests[0]['stream'] is False
     assert observations[0]['planning_mode'] == 'server_fallback'

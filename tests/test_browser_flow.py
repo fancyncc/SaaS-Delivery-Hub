@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -16,6 +17,11 @@ async def test_browser_80_member_delivery(client):
     from playwright.async_api import async_playwright, expect
 
     p = await project(client)
+    actor_id = (await client.get("/api/auth/me")).json()["data"]["id"]
+    assigned = await client.post(f"/api/projects/{p['id']}/members",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={"user_id": actor_id, "primary_role_code": "implementation_consultant"})
+    assert assigned.status_code == 200
     approver_api = await role_client(client, p["id"], "approver", "browser-approver@example.com")
     consultant_api = await role_client(client, p["id"], "implementation_consultant", "browser-consultant@example.com")
     base = "http://127.0.0.1:18111"
@@ -39,7 +45,10 @@ async def test_browser_80_member_delivery(client):
                 await page.goto(base + ("/platform/login" if platform else "/login"))
                 await page.get_by_label("平台账号邮箱" if platform else "账号", exact=True).fill(email)
                 await page.get_by_label("密码", exact=True).fill(password)
-                await page.get_by_role("button", name="进入平台后台" if platform else "登录", exact=True).click()
+                async with page.expect_response(lambda response: response.url.endswith("/api/auth/platform/login" if platform else "/api/auth/login")) as login_response:
+                    await page.get_by_role("button", name="进入平台后台" if platform else "登录", exact=True).click()
+                response = await login_response.value
+                assert response.status == 200, await response.text()
                 await page.wait_for_url(base + ("/platform" if platform else "/app"))
                 return page
             manager = await login("company-admin@example.com", "CompanyAdmin123")
@@ -60,6 +69,10 @@ async def test_browser_80_member_delivery(client):
             await expect(manager.get_by_role("heading", name=re.compile("文档资料"))).to_be_visible()
             await manager.get_by_role("button", name="项目概览", exact=True).click()
             await expect(manager.get_by_role("heading", name="基本信息", exact=True)).to_be_visible()
+            await manager.get_by_role("button", name="编辑项目", exact=True).click()
+            await manager.get_by_role("button", name="检查材料完整性", exact=True).click()
+            await expect(manager.get_by_text("必填材料完整，正式提交时仍会重新校验。", exact=True)).to_be_visible()
+            await manager.get_by_role("button", name="放弃修改", exact=True).click()
             assert "tab" not in parse_qs(urlsplit(manager.url).query)
             await manager.goto(base + "/app")
             artifact_dir = Path("tests/artifacts")
@@ -80,6 +93,11 @@ async def test_browser_80_member_delivery(client):
             await consultant.goto(run_url)
             csv_text = "name,email,department,role\n" + "\n".join(f"成员{i},browser{i}@example.com,设计部,{'admin' if i == 0 else 'member'}" for i in range(80))
             await consultant.get_by_label("成员 CSV 内容").fill(csv_text)
+            await consultant.get_by_role("button", name="预览导入影响", exact=True).click()
+            await expect(consultant.get_by_text("共 80 行；预计新增 80 名、已存在 0 名。", exact=True)).to_be_visible()
+            before = (await client.get(f"/api/projects/{p['id']}/delivery")).json()["data"]
+            assert not before["members"] and not before["imports"]
+            await consultant.locator('[aria-label="成员 CSV 内容"]').screenshot(path=str(artifact_dir / 'import-preview.png'))
             await consultant.get_by_role("button", name="校验并提交审批").click()
             await expect(consultant.get_by_label("成员 CSV 内容")).to_have_count(0)
             await expect(consultant.locator('.run-status strong')).to_have_text('数据导入审批', timeout=15000)
@@ -113,6 +131,13 @@ async def test_browser_80_member_delivery(client):
             assert (await download.value).suggested_filename.endswith(".md")
             await approver.get_by_role("link", name="查看执行追踪", exact=True).click()
             await expect(approver.get_by_role("heading", name="执行追踪", exact=True)).to_be_visible()
+            await expect(approver.get_by_text("本次执行已保存不可变输入与材料修订。", exact=True)).to_be_visible()
+            await expect(approver.get_by_text(re.compile(r"执行耗时：\d+(?:\.\d+)? ms")).first).to_be_visible()
+            await approver.get_by_role("button", name="查看材料", exact=True).first.click()
+            snapshot_detail = approver.locator('details').filter(has=approver.get_by_text("快照材料", exact=True))
+            await expect(snapshot_detail.locator('pre')).to_contain_text('requirements_text')
+            await expect(snapshot_detail.locator('pre')).to_contain_text('runtime')
+            await approver.screenshot(path=str(artifact_dir / "execution-snapshots.png"), full_page=True)
             async with approver.expect_download() as trace_download:
                 await approver.get_by_role("button", name="下载追踪 JSON").click()
             assert (await trace_download.value).suggested_filename.startswith("trace-")

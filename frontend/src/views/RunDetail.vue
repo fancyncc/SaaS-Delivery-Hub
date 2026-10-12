@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api, writeHeaders } from '../api'
 import type { AgentRun, AgentStep, Approval, Project } from '../types'
@@ -13,6 +13,18 @@ const steps = ref<AgentStep[]>([]), approvals = ref<Approval[]>([])
 const error = ref(''), message = ref(''), decisionComment = ref('')
 const delivery = ref<any>({artifacts:[], imports:[], members:[], feedback:[]})
 const csvText = ref(''), csvResult = ref<any>(null), feedbackText = ref('')
+const previewResult = ref<any>(null), previewBusy = ref(false)
+watch(csvText, () => { previewResult.value=null })
+async function previewCsv() {
+  previewBusy.value=true; error.value=''
+  const captured = csvText.value
+  try {
+    const result = await api(`/api/projects/${run.value?.project_id}/imports/preview`, {method:'POST',headers:writeHeaders(),body:JSON.stringify({csv_text:captured})})
+    if (captured === csvText.value) previewResult.value = result
+  }
+  catch(e:any) { error.value=e.message }
+  finally { previewBusy.value=false }
+}
 const failedCsv = ref<Record<string, string>>({})
 const retryingImport = ref(false)
 async function retryFailedImport(jobId: string) {
@@ -158,6 +170,8 @@ onBeforeUnmount(() => eventSource?.close())
     <section v-if="run?.allowed_actions?.includes('upload_csv')" class="panel">
       <h2>成员 CSV</h2><p>字段：name、email、department、role。角色支持 admin、manager、member、viewer；请包含管理员并与项目人数一致。</p>
       <input type="file" accept=".csv" @change="uploadFile"><textarea v-model="csvText" aria-label="成员 CSV 内容" rows="6" placeholder="name,email,department,role"></textarea><button class="primary" :disabled="!csvText" @click="validateCsv">校验并提交审批</button>
+      <button class="secondary" type="button" :disabled="!csvText || previewBusy" @click="previewCsv">{{previewBusy ? '预览中…' : '预览导入影响'}}</button>
+      <div v-if="previewResult" role="status"><p>{{previewResult.notice || previewResult.reason}}</p><p>共 {{previewResult.row_count}} 行；预计新增 {{previewResult.new_count || 0}} 名、已存在 {{previewResult.existing_count || 0}} 名。</p><ul><li v-for="(item,index) in previewResult.errors" :key="index">第 {{item.row}} 行：{{item.message}}；{{item.suggestion}}</li></ul></div>
       <pre v-if="csvResult">{{JSON.stringify(csvResult,null,2)}}</pre>
     </section>
     <section v-if="run" class="panel delivery-panel">

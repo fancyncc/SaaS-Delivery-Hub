@@ -45,7 +45,7 @@ def prepare(root=ROOT):
         if not values.get(key) and original.get(key):
             values[key] = original[key]
     values.update({
-        "REDIS_URL": "redis://redis:6379/0", "EXECUTION_MODE": "worker", "AGENT_ENGINE": "v2",
+        "REDIS_URL": "redis://redis:6379/0", "EXECUTION_MODE": "worker",
         "AUTO_CREATE_SCHEMA": "false", "MAIL_DEBUG": "false", "SMTP_HOST": "mailpit",
         "SMTP_PORT": "1025", "SMTP_STARTTLS": "false", "SMTP_USERNAME": "", "SMTP_PASSWORD": "",
         "FRONTEND_BASE_URL": "http://localhost:18080", "CORS_ORIGINS": "http://localhost:18080",

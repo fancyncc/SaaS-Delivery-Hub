@@ -41,7 +41,7 @@ async function submit() {
 async function retryIndex(id:string) {
   error.value = ''; message.value = ''
   try {
-    await api(`/api/knowledge/${id}/v3-index`, {method:'POST',headers:writeHeaders()})
+    await api(`/api/knowledge/${id}/reindex`, {method:'POST',headers:writeHeaders()})
     message.value = '已重新加入解析和索引队列。'
     await load()
   } catch (e:any) { error.value = e.message }
@@ -49,7 +49,7 @@ async function retryIndex(id:string) {
 const filtered = computed(() => documents.value.filter(d =>
   (d.project_id === route.params.id || includeShared.value && !d.project_id) && d.title.toLowerCase().includes(query.value.toLowerCase())))
 const count = computed(() => documents.value.filter(d => d.project_id === route.params.id).length)
-const labels: Record<string, string> = {v3_pending:'等待解析',v3_ready:'索引就绪',v3_failed:'解析或索引失败',v3_parsing:'解析中',v3_indexing:'索引中',v3_unsupported:'格式不支持',v3_missing_original:'需重新上传原文件'}
+const labels: Record<string, string> = {indexed_pending:'等待解析',indexed_ready:'索引就绪',indexed_failed:'解析或索引失败',indexed_parsing:'解析中',indexed_indexing:'索引中',indexed_unsupported:'格式不支持',indexed_missing_original:'需重新上传原文件'}
 let revision = 0
 async function load() {
   const current = ++revision
@@ -87,8 +87,8 @@ watch(() => route.params.id, () => {showSubmit.value=false; message.value=''; fi
         <article v-for="d in filtered" :key="d.id" class="document-row">
           <div class="file-identity"><span class="file-icon" aria-hidden="true">文</span><div><h3><router-link :to="`/app/knowledge/${d.id}`">{{ d.title }}</router-link><small>v{{d.version}}</small></h3><p :title="d.source">{{ d.source }}<template v-if="d.submitter_name"> · 提交人：{{d.submitter_name}}</template></p></div></div>
           <span class="file-scope">{{ d.project_id ? '项目私有' : '公司通用' }}</span>
-          <span class="file-status" :class="{ready:d.active && d.index_status==='v3_ready',failed:d.active && d.index_status==='v3_failed'}"><i></i>{{ d.active ? labels[d.index_status] || '等待索引' : '已停用' }}</span>
-          <span class="file-actions"><button v-if="project?.permissions?.includes('project.document.submit') && d.active && d.index_status==='v3_failed'" class="file-retry" @click="retryIndex(d.id)">重试索引</button><router-link class="file-open" :to="`/app/knowledge/${d.id}`">阅读全文 <span aria-hidden="true">↗</span></router-link></span>
+          <span class="file-status" :class="{ready:d.active && d.index_status==='indexed_ready',failed:d.active && d.index_status==='indexed_failed'}"><i></i>{{ d.active ? labels[d.index_status] || '等待索引' : '已停用' }}</span>
+          <span class="file-actions"><button v-if="project?.permissions?.includes('project.document.submit') && d.active && d.index_status==='indexed_failed'" class="file-retry" @click="retryIndex(d.id)">重试索引</button><router-link class="file-open" :to="`/app/knowledge/${d.id}`">阅读全文 <span aria-hidden="true">↗</span></router-link></span>
         </article>
       </template>
     </section>

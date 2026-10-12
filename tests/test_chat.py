@@ -101,6 +101,9 @@ async def test_llm_context_memory_and_failure_are_transactional(client, monkeypa
     captured = []
 
     async def fake(task, source, schema):
+        from backend.chat_planning import QueryPlan
+        if schema is QueryPlan:
+            return QueryPlan(action="rewrite", query="管理员要求", clarification="")
         captured.append(source)
         return ChatAnswer(answer="需导入 80 名成员。[1]", citation_ids=[source['evidence'][0]['id']])
 

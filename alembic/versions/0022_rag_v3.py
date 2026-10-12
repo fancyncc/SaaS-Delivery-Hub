@@ -2,7 +2,7 @@
 import sqlalchemy as sa
 
 from alembic import op
-from backend.vector_type import V3Vector
+from backend.vector_type import FlexibleVector
 
 revision='0022_rag_v3'
 down_revision='0021_retrieval_sources'
@@ -23,7 +23,7 @@ def upgrade():
         sa.Column('document_id',sa.String(36),sa.ForeignKey('rag_v3_documents.id',ondelete='CASCADE'),nullable=False),sa.Column('node_id',sa.String(80),nullable=False),
         sa.Column('ordinal',sa.Integer(),nullable=False),sa.Column('text',sa.Text(),nullable=False),sa.Column('heading',sa.Text(),nullable=False),
         sa.Column('kind',sa.String(30),nullable=False),sa.Column('location',sa.JSON(),nullable=False),sa.Column('parent',sa.String(80)),sa.Column('record',sa.String(200)),
-        sa.Column('tokens',sa.Integer(),nullable=False),sa.Column('lexemes',sa.Text(),nullable=False),sa.Column('identifiers',sa.JSON(),nullable=False),sa.Column('embedding',V3Vector()))
+        sa.Column('tokens',sa.Integer(),nullable=False),sa.Column('lexemes',sa.Text(),nullable=False),sa.Column('identifiers',sa.JSON(),nullable=False),sa.Column('embedding',FlexibleVector()))
     for name in ['rag_v3_documents','rag_v3_nodes','rag_v3_units']:
         op.create_index('ix_'+name+'_tenant_id',name,['tenant_id'])
         if name!='rag_v3_documents':

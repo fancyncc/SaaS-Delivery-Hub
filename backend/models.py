@@ -375,6 +375,7 @@ class AgentRun(Base):
     current_node: Mapped[str] = mapped_column(String(80), default="create_project")
     state: Mapped[dict] = mapped_column(JSON, default=dict)
     trace_id: Mapped[str] = mapped_column(String(32))
+    snapshot_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
@@ -515,6 +516,7 @@ class WorkflowOutbox(Base):
     run_version: Mapped[int] = mapped_column(Integer)
     tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
     actor_id: Mapped[str] = mapped_column(ForeignKey("users.id"))
+    trace_context: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
     processed: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str] = mapped_column(Text, default="")

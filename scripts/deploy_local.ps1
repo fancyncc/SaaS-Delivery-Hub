@@ -85,35 +85,35 @@ try {
     Invoke-DockerChecked @('compose', 'exec', '-T', 'retrieval', 'python', '-c',
         "import urllib.request; urllib.request.urlopen('http://localhost:8010/health/ready', timeout=10)")
 
-    # Parser/model identity changes invalidate the derived V3 side index. The
+    # Parser/model identity changes invalidate the derived 知识检索 side index. The
     # single beat schedules the indexer in bounded batches; do not report a
     # synchronized release while old-identity documents are still pending.
-    $v3Identity = (& docker compose exec -T api python -c 'from backend.rag_v3_index import identity; print(identity())').Trim()
-    if ($LASTEXITCODE -ne 0 -or $v3Identity -notmatch '^v3-structure-1:[a-f0-9]{32}$') {
-        throw 'Unable to resolve the deployed V3 index identity.'
+    $indexIdentity = (& docker compose exec -T api python -c 'from backend.knowledge_index import identity; print(identity())').Trim()
+    if ($LASTEXITCODE -ne 0 -or $indexIdentity -notmatch '^v3-structure-1:[a-f0-9]{32}$') {
+        throw 'Unable to resolve the deployed 知识检索 index identity.'
     }
     $lastBackfillState = ''
-    $v3Synchronized = $false
+    $indexSynchronized = $false
     for ($attempt = 0; $attempt -lt 180; $attempt++) {
-        $query = "SELECT count(*) FILTER (WHERE phase='ready' AND identity='$v3Identity'), count(*) FILTER (WHERE phase='failed'), count(*) FROM rag_v3_documents;"
+        $query = "SELECT count(*) FILTER (WHERE phase='ready' AND identity='$indexIdentity'), count(*) FILTER (WHERE phase='failed'), count(*) FROM retrieval_documents;"
         $backfillState = ((& docker exec $postgres psql -U $owner -d $database -At -F '|' -c $query) -join '').Trim()
         if ($LASTEXITCODE -ne 0 -or $backfillState -notmatch '^\d+\|\d+\|\d+$') {
-            throw 'Unable to inspect the V3 index backfill state.'
+            throw 'Unable to inspect the 知识检索 index backfill state.'
         }
         if ($backfillState -ne $lastBackfillState) {
-            Write-Output "V3 backfill state (ready-current|failed|total): $backfillState"
+            Write-Output "知识检索 backfill state (ready-current|failed|total): $backfillState"
             $lastBackfillState = $backfillState
         }
         $counts = $backfillState.Split('|') | ForEach-Object { [int]$_ }
-        if ($counts[1] -gt 0) { throw "V3 backfill contains $($counts[1]) failed document(s)." }
+        if ($counts[1] -gt 0) { throw "知识检索 backfill contains $($counts[1]) failed document(s)." }
         if ($counts[0] -eq $counts[2]) {
-            $v3Synchronized = $true
+            $indexSynchronized = $true
             break
         }
         Start-Sleep -Seconds 5
     }
-    if (-not $v3Synchronized) { throw 'V3 index backfill did not finish within 15 minutes.' }
-    Write-Output "Local release ready at revision $head with synchronized V3 indexes. Verified backup: $backup"
+    if (-not $indexSynchronized) { throw '知识检索 index backfill did not finish within 15 minutes.' }
+    Write-Output "Local release ready at revision $head with synchronized 知识检索 indexes. Verified backup: $backup"
 } catch {
     $failure = $_
     if ($migrationStarted -and -not $migrationComplete -and $backupVerified) {

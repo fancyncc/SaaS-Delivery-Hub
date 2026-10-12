@@ -71,7 +71,7 @@ def prepare():
     settings.embedding_model = ""
     settings.reranker_model = ""
     settings.execution_mode = "inline"
-    settings.agent_engine = "legacy"
+
     settings.storage_backend = "database"
     settings.cookie_secure = False
     settings.frontend_base_url = "http://127.0.0.1:8000"

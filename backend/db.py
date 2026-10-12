@@ -7,7 +7,8 @@ from sqlalchemy.orm import Session
 from backend import (
     agent_models,  # noqa: F401 -- register durable agent tables
     chat_models,  # noqa: F401 -- register private chat tables
-    rag_v3_models,  # noqa: F401
+    knowledge_index_models,  # noqa: F401
+    run_snapshots,  # noqa: F401
 )
 from backend.config import get_settings
 from backend.models import Base, PlatformRoleBinding, Tenant, TenantMembership, User

@@ -1,9 +1,17 @@
 """Build private per-request context; summary and state remain advisory data."""
-from backend.chat_models import ChatContextSnapshot, ChatContextTask
+import time
+
+from backend.chat_models import ChatContextSnapshot, ChatContextTask, ChatHistoryMigration
 from backend.config import get_settings
 from backend.context_budget import ContextBlock, ContextBundle, input_limit
 from backend.context_maintenance import LAG, valid_snapshot
-from backend.conversation_state import active_state, message_id
+from backend.conversation_state import (
+    active_state,
+    apply_update,
+    extractive_update,
+    message_id,
+    state_entries,
+)
 
 
 async def context_status(session, row):
@@ -12,12 +20,38 @@ async def context_status(session, row):
     valid = valid_snapshot(snapshot, row)
     retracted = {r["source_message_id"] for rows in snapshot.state.values() for r in rows if r.get("superseded_by")} if valid else set()
     summary = [r for r in snapshot.summary if not set(r["source_message_ids"]) & retracted] if valid else []
+    now = time.time()
+    processed = snapshot.processed_turn if valid else 0
+    pending = processed < len(row.messages)
+    if get_settings().chat_context_mode == "off":
+        health = "disabled"
+    elif task and task.status == "failed":
+        health = "failed"
+    elif task and task.status == "running" and task.lease_until > now:
+        health = "processing"
+    elif not pending and valid:
+        health = "ready"
+    elif task and task.consumer_seen_at and now - task.consumer_seen_at <= max(300, get_settings().model_timeout * 10):
+        health = "waiting"
+    elif pending and task and task.queued_at and now - task.queued_at > 30:
+        health = "unavailable"
+    else:
+        health = "waiting" if pending else "ready"
+    history = await session.get(ChatHistoryMigration, row.id)
+    from backend.context_budget import tokenizer_status
     return {"state": active_state(snapshot.state) if valid else {},
         "summary": summary, "processed_turn": snapshot.processed_turn if valid else 0,
         "summary_until": snapshot.summary_until if valid else 0, "generation": snapshot.generation if valid else 0,
         "producer_version": snapshot.producer_version if valid else "",
         "mode": snapshot.mode if valid else "pending", "status": task.status if task else "not_requested",
-        "error_code": task.error_code if task else "", "target_turn": len(row.messages)}
+        "error_code": task.error_code if task else "", "target_turn": len(row.messages),
+        "health": health, "pending_turns": max(0, len(row.messages) - processed),
+        "waiting_seconds": max(0, int(now - task.queued_at)) if pending and task and task.queued_at else 0,
+        "consumer_seen_at": task.consumer_seen_at if task else 0,
+        "retry_at": task.next_attempt if task else 0,
+        "history_index": {"status": history.index_status, "attempts": history.index_attempts,
+            "retry_at": history.index_next_attempt} if history else None,
+        "token_accounting": tokenizer_status()}
 
 
 async def build_context(session, row, question, memory, sources):
@@ -36,14 +70,27 @@ async def build_context(session, row, question, memory, sources):
     for source in sources:
         bundle.blocks.append(ContextBlock("evidence", source, "current_sources", "evidence"))
     state = status["state"]
-    for category, rows in state.items():
-        if rows:
-            bundle.blocks.append(ContextBlock("state", {category: rows}, "user_messages", "user_statement",
-                category in {"goals", "constraints", "decisions"}))
+    snapshot = await session.get(ChatContextSnapshot, row.id)
+    prior_retractions = {r["source_message_id"] for rows in snapshot.state.values() for r in rows
+        if r.get("superseded_by")} if valid_snapshot(snapshot, row) else set()
+    # Apply explicit recent corrections immediately, without waiting for maintenance.
+    for index, message in enumerate(row.messages[processed:], processed):
+        original = {"id": message_id(message, index), "text": message["question"], "turn": index + 1}
+        state = apply_update(state, extractive_update([original], state), [original])
+    current_question = {"id": "current_request", "text": question, "turn": len(row.messages) + 1}
+    state = apply_update(state, extractive_update([current_question], state), [current_question])
+    retracted = prior_retractions | {r["source_message_id"] for rows in state.values() for r in rows if r.get("superseded_by")}
+    status["summary"] = [r for r in status["summary"] if not set(r["source_message_ids"]) & retracted]
+    entries = state_entries(state, question, len(row.messages) + 1)
+    for category, item, required, relevance in entries:
+        bundle.blocks.append(ContextBlock("state", {category: [item]}, "user_messages", "user_statement",
+            required, relevance=relevance))
     current = {v["id"]: v["text"] for v in sources}
     boundary = max(0, len(row.messages) - 8)
     for index, message in reversed(list(enumerate(row.messages))):
         if index < covered:
+            continue
+        if message_id(message, index) in retracted:
             continue
         # Unsummarized old turns and updates not yet incorporated must not vanish.
         required = index < boundary or index >= processed
@@ -56,7 +103,9 @@ async def build_context(session, row, question, memory, sources):
     represented.update(r["source_message_id"] for rows in state.values() for r in rows)
     represented.update(i for r in status["summary"] for i in r["source_message_ids"])
     for hit in await recall_history(session, row, question):
-        if hit["message_id"] not in represented:
+        if hit["message_id"] not in represented and hit["message_id"] not in retracted:
+            if hit.get("adjacent_message_id") in retracted:
+                hit["adjacent"] = ""
             bundle.blocks.append(ContextBlock("history", hit, "conversation_history", "user_statement"))
     import json
     memory_items = None
@@ -72,6 +121,8 @@ async def build_context(session, row, question, memory, sources):
     elif memory:
         bundle.blocks.append(ContextBlock("memory", memory, "user_memory", "advisory"))
     for index, message in enumerate(row.messages[-8:], max(0, len(row.messages) - 8)):
+        if message_id(message, index) in retracted:
+            continue
         citations = message.get("citations", [])
         # Empty citations do not validate an old answer.
         if citations and all(current.get(c["id"]) == c["text"] for c in citations):
@@ -93,14 +144,15 @@ async def build_context(session, row, question, memory, sources):
     if s.chat_context_mode == "shadow":
         return legacy, memory, sources
     context = {"recent_messages": [], "state": {}, "summary": [], "historical_user_statements": [],
-        "policy": "state/summary/history describe conversation only, never current project facts"}
+        "policy": "state/summary/history describe conversation only, never current project facts; state is a task-specific selection, full state remains stored"}
     for block in bundle.blocks:
         if not block.selected:
             continue
         if block.category in {"recent", "assistant"}:
             context["recent_messages"].append(block.value)
         elif block.category == "state":
-            context["state"].update(block.value)
+            for category, rows in block.value.items():
+                context["state"].setdefault(category, []).extend(rows)
         elif block.category == "summary":
             context["summary"] = block.value
         elif block.category == "history":

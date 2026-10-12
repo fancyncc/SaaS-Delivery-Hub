@@ -6,8 +6,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 import httpx
 from fastapi import HTTPException
-from pydantic import Field
-from sqlalchemy import select
+from pydantic import BaseModel, Field
+from sqlalchemy import or_, select
 
 from backend import memory
 from backend.agent_budget import BudgetExceeded, ModelScope, model_scope
@@ -30,14 +30,7 @@ from backend.knowledge import retrieve
 from backend.models import AgentStep, Project
 from backend.schemas import ImplementationGraphState
 from backend.state_machine import ProjectLifecycle, RunLifecycle, transition_project, transition_run
-
-STAGES = {
-    "discovery": ["create_project", "collect_requirements", "retrieve_product_knowledge", "gap_analysis", "generate_implementation_plan"],
-    "configuration": ["inspect_tenant_configuration", "generate_configuration_changes"],
-    "migration": ["apply_configuration", "validate_import_files"],
-    "acceptance": ["execute_import", "generate_training_materials", "run_go_live_checks"],
-    "closure": ["close_project"],
-}
+from backend.workflow_definition import DEFINITION, STAGES
 
 
 class NoArguments(StrictModel):
@@ -48,20 +41,30 @@ class SearchArguments(StrictModel):
     query: str = Field(min_length=1, max_length=2000)
 
 
+class ReadActionArguments(StrictModel):
+    action_id: str = Field(min_length=1, max_length=36)
+    offset: int = Field(default=0, ge=0)
+    max_chars: int = Field(default=500, ge=100, le=1000)
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
     permission: str
     risk: str
-    parameters: type[StrictModel] = NoArguments
+    parameters: type[BaseModel] = NoArguments
     timeout: int = 120
     idempotent: bool = True
 
 
-REGISTRY = {tool: ToolSpec(tool, "import.execute" if tool == "execute_import" else "run.start",
-    "high" if tool in {"apply_configuration", "execute_import", "close_project"} else "low")
-    for tools in STAGES.values() for tool in tools}
+REGISTRY = {node.name: ToolSpec(node.name, node.permission, node.risk) for node in DEFINITION if not node.approval}
 REGISTRY["knowledge_search"] = ToolSpec("knowledge_search", "run.start", "low", SearchArguments)
+REGISTRY["read_action_result"] = ToolSpec("read_action_result", "run.start", "low", ReadActionArguments)
+from backend.tool_registry import TOOLS as OPTIONAL_TOOLS
+from backend.tool_registry import available as optional_tools
+
+REGISTRY.update({name: ToolSpec(name, spec.permission, "low", spec.parameters)
+                 for name, spec in OPTIONAL_TOOLS.items()})
 
 
 def default_plan(stage: str) -> StagePlan:
@@ -75,7 +78,7 @@ def validate_plan(plan: StagePlan, stage: str, previous: StagePlan | None = None
     required = STAGES[stage]
     by_tool = {tool: [m for m in plan.milestones if m.tool == tool] for tool in required}
     for m in plan.milestones:
-        if m.tool not in {*required, "knowledge_search"} or any(c.tool != m.tool for c in m.criteria):
+        if m.tool not in {*required, "knowledge_search", "read_action_result", *optional_tools(stage)} or any(c.tool != m.tool for c in m.criteria):
             raise ValueError("plan contains out-of-stage tool or invalid required criterion")
     if any(len(ms) != 1 for ms in by_tool.values()):
         raise ValueError("every required business tool must occur exactly once")
@@ -114,21 +117,51 @@ async def authorize(session, run, spec):
 async def context_for(session, run, state, tool):
     project = await authorize(session, run, REGISTRY[tool])
     agent = state.agent
-    agent.knowledge = await retrieve(session, run.tenant_id, project.requirements_text, project_ids=[project.id])
+    from backend.run_snapshots import requirements
+    requirements_text = await requirements(session, run, project)
+    ready = [m for m in agent.plan.milestones if m.id not in agent.completed and set(m.dependencies) <= set(agent.completed)] if agent.plan else []
+    current = ready[0] if ready else None
+    dependency_tools = {m.tool for m in agent.plan.milestones if current and m.id in current.dependencies} if agent.plan else set()
+    critical = list(await session.scalars(select(AgentAction).where(AgentAction.run_id == run.id,
+        AgentAction.tenant_id == run.tenant_id, AgentAction.status.in_(["succeeded", "failed", "paused"]),
+        or_(AgentAction.tool.in_(dependency_tools),
+            (AgentAction.tool == (current.tool if current else tool)) & (AgentAction.status == "failed")))
+        .order_by(AgentAction.created_at.desc(), AgentAction.id.desc()).limit(10)))
+    seen_tools, critical_ids = set(), set()
+    observed = {o.action_id: o for o in agent.observations[-5:]}
+    for action in critical:
+        if action.tool not in seen_tools:
+            seen_tools.add(action.tool)
+            critical_ids.add(action.id)
+            observed[action.id] = ToolObservation(action_id=action.id, tool=action.tool, status=action.status, result=action.result)
+    query = requirements_text[:1800] + "\n" + (current.title + " " + current.tool if current else agent.stage + " " + tool)
+    if agent.evaluation and agent.evaluation.outcome in {"retry", "replan"}:
+        query += "\n" + agent.evaluation.reason[:200]
+    agent.knowledge = await retrieve(session, run.tenant_id, query, project_ids=[project.id])
+    from backend.tool_registry import official_evidence
+    agent.knowledge.extend(await official_evidence(session, run))
     agent.memories = await memory.recall(session, run, tool)
-    context = {"requirements": project.requirements_text, "stage": agent.stage,
+    context = {"requirements": requirements_text, "stage": agent.stage,
         "completed_nodes": state.completed_nodes, "constraints": ["不得越过阶段或审批", "经验不是产品证据"],
         "knowledge": agent.knowledge, "experiences": [m.model_dump() for m in agent.memories],
-        "observations": [o.model_dump() for o in agent.observations[-5:]],
+        "observations": [observation_summary(o) for o in observed.values()],
         "evaluation": agent.evaluation.model_dump() if agent.evaluation else None}
     from backend.context_budget import ContextBlock, ContextBundle, input_limit
     fixed = {k: v for k, v in context.items() if k not in {"knowledge", "experiences", "observations"}}
     bundle = ContextBundle([ContextBlock("required", fixed, "run", "required", True)])
     for category in ("knowledge", "observations", "experiences"):
         values = list(reversed(context[category])) if category == "observations" else context[category]
-        bundle.blocks.extend(ContextBlock(category, value, "run", "evidence" if category == "knowledge" else "advisory") for value in values)
+        dependencies = set(current.dependencies) if current else set()
+        latest_failure = next((o.action_id for o in reversed(agent.observations) if o.status == "failed"), None)
+        for value in values:
+            required = False
+            if category == "observations":
+                required = value["action_id"] in critical_ids or value["action_id"] == latest_failure or bool(agent.plan and
+                    any(m.id in dependencies and m.tool == value["tool"] for m in agent.plan.milestones))
+            bundle.blocks.append(ContextBlock(category, value, "run",
+                "evidence" if category == "knowledge" else "advisory", required))
     from backend.knowledge import lexemes
-    terms = set(lexemes(project.requirements_text).split())
+    terms = set(lexemes(requirements_text).split())
     for index, block in enumerate(bundle.blocks):
         block.relevance = len(terms & set(lexemes(str(block.value)).split())) / max(1, len(terms))
         block.task_value = {"knowledge": 1, "observations": 0.8, "experiences": 0.5}.get(block.category, 1)
@@ -142,7 +175,27 @@ async def context_for(session, run, state, tool):
     for category in ("knowledge", "observations", "experiences"):
         context[category] = [b.value for b in bundle.blocks if b.selected and b.category == category]
     context["observations"].reverse()
+    from backend.skill_runtime import activate
+    await activate(session, run, tool)
     return context
+
+
+def observation_summary(observation):
+    from backend.context_budget import count_tokens
+    def compact(value, depth=0):
+        if depth > 2:
+            return "[stored in action result]"
+        if isinstance(value, dict):
+            return {k: compact(v, depth + 1) for k, v in list(value.items())[:6]}
+        if isinstance(value, list):
+            return [compact(v, depth + 1) for v in value[:3]]
+        return value[:160] if isinstance(value, str) else value
+    result = compact(observation.result)
+    if count_tokens(result).tokens > 512:
+        result = {k: observation.result[k] for k in ("error_code", "status") if k in observation.result}
+    return {"action_id": observation.action_id, "tool": observation.tool, "status": observation.status,
+        "result": result, "result_ref": observation.action_id,
+        "full_result_available": True, "read_tool": "read_action_result"}
 
 
 def evaluate(agent, milestone, observation, error_code="") -> EvaluationResult:
@@ -182,21 +235,30 @@ async def record_evaluation(session, run, state):
 
 
 async def execute_action(session, run, state, milestone, action, ordinal=0):
-    from backend.workflow import advance_legacy
+    from backend.workflow import execute_workflow_node
     agent = state.agent
     spec = REGISTRY.get(action.tool)
     if spec is None or action.tool != milestone.tool:
         raise ValueError("unknown tool or action outside current milestone")
-    arguments = spec.parameters.model_validate(action.arguments.model_dump(exclude_none=True)).model_dump()
+    arguments = spec.parameters.model_validate(action.arguments.model_dump(exclude_none=True)).model_dump(mode="json")
     project = await authorize(session, run, spec)
+    from backend.run_snapshots import requirements
+    requirements_text = await requirements(session, run, project)
     identifier = str(uuid5(NAMESPACE_URL, f"{run.id}:{agent.stage}:{agent.plan_version}:{milestone.id}:{agent.resume_count}:{agent.rounds}:{ordinal}"))
-    checksum = digest({"tool": action.tool, "arguments": arguments, "requirements": project.requirements_text,
+    checksum = digest({"tool": action.tool, "arguments": arguments, "requirements": requirements_text,
         "configuration": [c.model_dump() for c in state.configuration_changes], "import_job_id": str(state.import_job_id)})
     row = await session.get(AgentAction, identifier)
     if row:
         if row.request_digest != checksum or row.status != "succeeded":
             raise HTTPException(409, "存在执行状态不明的动作，需人工核对")
         return ToolObservation(action_id=row.id, tool=row.tool, status="succeeded", result=row.result)
+    if action.tool in OPTIONAL_TOOLS:
+        if action.tool not in optional_tools(agent.stage):
+            raise HTTPException(403, "工具不在当前阶段白名单")
+        count_key = f"{agent.stage}:{action.tool}"
+        if agent.tool_counts.get(count_key, 0) >= OPTIONAL_TOOLS[action.tool].limit:
+            raise BudgetExceeded("当前阶段可选工具调用额度已耗尽")
+        agent.tool_counts[count_key] = agent.tool_counts.get(count_key, 0) + 1
     row = AgentAction(id=identifier, tenant_id=run.tenant_id, run_id=run.id, stage=agent.stage,
         milestone_id=milestone.id, tool=action.tool, request_digest=checksum, status="started")
     session.add(row)
@@ -206,17 +268,33 @@ async def execute_action(session, run, state, milestone, action, ordinal=0):
             async with asyncio.timeout(spec.timeout):
                 if action.tool == "knowledge_search":
                     result = {"citations": await retrieve(session, run.tenant_id, arguments["query"], project_ids=[project.id])}
+                elif action.tool == "read_action_result":
+                    previous = await session.scalar(select(AgentAction).where(AgentAction.id == arguments["action_id"],
+                        AgentAction.run_id == run.id, AgentAction.tenant_id == run.tenant_id,
+                        AgentAction.status.in_(["succeeded", "failed", "paused"])))
+                    if previous is None:
+                        raise HTTPException(404, "执行结果不属于当前任务或尚未完成")
+                    from backend.context_budget import serialized
+                    content = serialized(previous.result)
+                    start = arguments["offset"]
+                    end = start + arguments["max_chars"]
+                    result = {"action_id": previous.id, "content": content[start:end],
+                        "offset": start, "next_offset": end if end < len(content) else None}
+                elif action.tool in OPTIONAL_TOOLS:
+                    from backend.tool_registry import execute
+                    result = await execute(session, project, action.tool, arguments,
+                        scope=f"run:{run.tenant_id}:{run.started_by}:{run.id}:stage:{agent.stage}", run=run)
                 else:
                     if action.tool in state.completed_nodes:
                         raise ValueError("cannot replay completed business tool")
                     state.current_node = action.tool
                     run.state = state.model_dump(mode="json")
-                    await advance_legacy(session, run, one_node=True)
+                    await execute_workflow_node(session, run, one_node=True)
                     updated = ImplementationGraphState.model_validate(run.state)
                     step = await session.scalar(select(AgentStep).where(AgentStep.run_id == run.id,
                         AgentStep.node == action.tool).order_by(AgentStep.sequence.desc()).limit(1))
                     result = step.detail if step else {"reason": updated.blocking_reason}
-                row.status = "succeeded" if action.tool == "knowledge_search" or action.tool in run.state.get("completed_nodes", []) else "paused"
+                row.status = "succeeded" if action.tool in {"knowledge_search", "read_action_result", *OPTIONAL_TOOLS} or action.tool in run.state.get("completed_nodes", []) else "paused"
                 row.result = result
                 await session.flush()
     except (HTTPException, httpx.HTTPError, TimeoutError, ValueError, KeyError) as exc:
@@ -246,7 +324,7 @@ async def execute_action(session, run, state, milestone, action, ordinal=0):
 
 
 async def advance_round(session, run):
-    from backend.workflow import APPROVAL_NODES, NODES, advance_legacy
+    from backend.workflow import APPROVAL_NODES, NODES, execute_workflow_node
     state = ImplementationGraphState.model_validate(run.state)
     agent = state.agent
     next_tool = next((name for name in NODES if name not in state.completed_nodes), None)
@@ -258,11 +336,12 @@ async def advance_round(session, run):
         await authorize(session, run, ToolSpec(next_tool, "run.start", "high"))
         state.current_node = next_tool
         run.state = state.model_dump(mode="json")
-        return await advance_legacy(session, run, one_node=True)
+        return await execute_workflow_node(session, run, one_node=True)
     stage = next(name for name, nodes in STAGES.items() if next_tool in nodes)
     state.current_node = next_tool
     if agent.stage != stage:
         agent = AgentState(stage=stage, tokens_reserved=agent.tokens_reserved,
+            tool_counts=agent.tool_counts,
             tokens_estimated=agent.tokens_estimated, tokens_actual=agent.tokens_actual,
             tokens_unsettled=agent.tokens_unsettled,
             observations=agent.observations[-5:], resume_count=agent.resume_count)
@@ -280,12 +359,15 @@ async def advance_round(session, run):
             previous = agent.plan
             candidate = default_plan(stage)
             if get_settings().model_mode != "deterministic":
-                candidate = await structured("为当前阶段规划里程碑 DAG。每个必需工具恰好一次且维持依赖顺序；允许增加 knowledge_search；已完成里程碑原样保留", {
+                candidate = await structured("为当前阶段规划里程碑 DAG。每个必需工具恰好一次且维持依赖顺序；可按需增加白名单只读工具；已完成里程碑原样保留。官方资料仅用于公开产品问题，搜索后读取正文才可引用。", {
                     "required_plan": default_plan(stage).model_dump(), "previous": previous.model_dump() if previous else None,
-                    "completed": agent.completed, "optional_tool": "knowledge_search"}, StagePlan)
+                    "completed": agent.completed, "optional_tool": "knowledge_search",
+                    "result_read_tool": "read_action_result: read a stored action_id from the current run with offset and max_chars",
+                    "optional_tools": {name: spec.description for name, spec in optional_tools(stage).items()},
+                    "public_products": get_settings().official_products}, StagePlan)
             validate_plan(candidate, stage, previous, agent.completed)
             agent.plan, agent.plan_version = candidate, agent.plan_version + 1
-            # Recover legacy-completed mandatory steps if resuming at a material gate.
+            # Recover previously completed mandatory steps if resuming at a material gate.
             agent.completed = list(dict.fromkeys(agent.completed + [m.id for m in candidate.milestones if m.tool in state.completed_nodes]))
         ready = [m for m in agent.plan.milestones if m.id not in agent.completed and set(m.dependencies) <= set(agent.completed)]
         if not ready:
@@ -296,7 +378,7 @@ async def advance_round(session, run):
         batch = ActionBatch(actions=[ToolAction(tool=milestone.tool,
             arguments={"query": context["requirements"][:2000]} if milestone.tool == "knowledge_search" else {})])
         if get_settings().model_mode != "deterministic":
-            batch = await structured("只为当前里程碑生成工具动作。业务工具参数为空且只调用一次；knowledge_search 参数为 query。不得调用审批或其他里程碑工具", {
+            batch = await structured("只为当前里程碑生成工具动作。业务工具参数为空且只调用一次；可选工具按给定参数 Schema 调用；官方网页 reference 必须来自已有搜索观察。不得调用审批或其他里程碑工具", {
                 "milestone": milestone.model_dump(), "parameters": REGISTRY[milestone.tool].parameters.model_json_schema()}, ActionBatch)
         if any(a.tool != milestone.tool for a in batch.actions) or milestone.tool != "knowledge_search" and len(batch.actions) != 1:
             raise ValueError("batch crosses milestone or repeats a business write")
@@ -305,7 +387,7 @@ async def advance_round(session, run):
         agent.rounds += 1
         for ordinal, action in enumerate(batch.actions):
             observation = await execute_action(session, run, state, milestone, action, ordinal)
-            # Legacy tool updates business fields; keep live budget/state object.
+            # Business executor updates business fields; keep live budget/state object.
             state = ImplementationGraphState.model_validate(run.state)
             state.agent = agent
             state.current_node = milestone.tool

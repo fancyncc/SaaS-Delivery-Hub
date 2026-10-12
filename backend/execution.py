@@ -12,6 +12,8 @@ async def dispatch(session: AsyncSession, run: AgentRun) -> AgentRun:
         return await advance(session, run)
     existing = await session.scalar(select(WorkflowOutbox).where(WorkflowOutbox.run_id == run.id, WorkflowOutbox.run_version == run.version))
     if not existing:
-        session.add(WorkflowOutbox(run_id=run.id, tenant_id=run.tenant_id, actor_id=run.started_by, run_version=run.version))
+        from backend.observability import trace_carrier
+        session.add(WorkflowOutbox(run_id=run.id, tenant_id=run.tenant_id, actor_id=run.started_by,
+                                  run_version=run.version, trace_context=trace_carrier()))
     await session.flush()
     return run

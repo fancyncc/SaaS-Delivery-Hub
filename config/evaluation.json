@@ -1,0 +1,18 @@
+{
+  "minimum_questions": 200,
+  "minimum_domains": 6,
+  "minimum_validation_per_format": 12,
+  "minimum_noanswer_per_language": 20,
+  "recall_minimum": 0.95,
+  "coverage_minimum": 0.9,
+  "noanswer_false_positive_maximum": 0.05,
+  "token_reduction_target": 0.25,
+  "require_token_reduction": false,
+  "latency_ratio_maximum": 1.5,
+  "answer_completeness_minimum": 0.9,
+  "require_independent_review": true,
+  "require_paired_baseline": true,
+  "require_answer_evaluation": true,
+  "require_fresh_validation": true,
+  "required_acceptance": ["backend", "agent", "memory", "browser", "postgres_rls", "worker_recovery", "backup_restore", "distributed_trace", "real_services", "retrieval", "answers", "performance"]
+}

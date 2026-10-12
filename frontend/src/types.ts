@@ -36,6 +36,7 @@ export type AgentRun = {
   id: string; project_id: string; status: string; current_node: string
   run_number: number; retry_of_run_id?: string; version: number
   state: Record<string, any>; trace_id: string
+  snapshot_version?: number
   allowed_actions: string[]; blocking_reason?: string
 }
 

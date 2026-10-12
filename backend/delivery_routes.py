@@ -157,7 +157,9 @@ async def retry_failed_rows(job_id: UUID, payload: FailedRowsRetry, request: Req
     transition_project(project, ProjectLifecycle.IN_PROGRESS)
     if get_settings().execution_mode == "inline":
         transition_run(run, RunLifecycle.RUNNING)
-    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status), import_job_id=UUID(new_job.id), engine_version=get_settings().agent_engine).model_dump(mode="json")
+    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status), import_job_id=UUID(new_job.id)).model_dump(mode="json")
+    from backend.run_snapshots import capture
+    await capture(session, run, project)
     await dispatch(session, run)
     data = {"run_id": run.id, "job_id": new_job.id}
     session.add(IdempotencyRecord(tenant_id=user.tenant_id, scope=scope, key=key, response=data))
@@ -220,7 +222,7 @@ async def revise_materials(project_id: UUID, payload: MaterialRevision, request:
     if project.lifecycle_status not in {"draft", "ready", "blocked"} or project.version != payload.expected_version:
         raise HTTPException(409, "仅能修订未启动或已阻塞项目，请刷新项目版本")
     active_agent = await session.scalar(select(AgentRun).where(AgentRun.project_id == project.id, AgentRun.status == "blocked").limit(1))
-    if active_agent and active_agent.state.get("engine_version") == "v2":
+    if active_agent:
         raise HTTPException(409, "修改已审批流程的原始需求需先取消当前 Run，再修订材料并创建新 Run 重新审批")
     if len(payload.requirements_text.strip()) < 20:
         raise HTTPException(422, "具体需求至少 20 字")
@@ -270,7 +272,7 @@ async def revise_configuration(run_id: UUID, payload: ConfigurationProposal, req
     old_approval.status = "cancelled"
     old_approval.version += 1
     state.configuration_changes = [ConfigurationChange(path=path, old_value=ws.configuration.get(path), new_value=value, risk="high", reason="实施顾问修订方案") for path, value in values.items() if ws.configuration.get(path) != value]
-    item = Approval(tenant_id=run.tenant_id, run_id=run.id, kind="configuration", requested_by=user.user_id, payload=await delivery.material(session, project, run, state, "configuration"))
+    item = Approval(tenant_id=run.tenant_id, run_id=run.id, kind="configuration", requested_by=user.user_id, payload=await delivery.approval_material(session, project, run, state, "configuration"))
     session.add(item)
     await session.flush()
     state.pending_approval_id = UUID(item.id)

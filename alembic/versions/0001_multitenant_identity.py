@@ -31,7 +31,9 @@ LATER_TABLES = {
     "chat_history_migrations", "chat_memory_items", "chat_memory_preferences",
     "chat_memory_candidates", "rag_v3_documents",
     "rag_v3_nodes", "rag_v3_units", "project_tasks",
+    "retrieval_documents", "retrieval_nodes", "retrieval_units",
     "project_task_documents", "project_task_reviews",
+    "run_snapshots",
 }
 
 

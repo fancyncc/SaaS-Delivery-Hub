@@ -1,7 +1,7 @@
 # Simulate failed candidate warmup; no Docker process or business data is touched.
 $ErrorActionPreference = 'Stop'
 $calls = [System.Collections.Generic.List[string]]::new()
-$temporaryReport = Join-Path ([System.IO.Path]::GetTempPath()) ('v3-comparison-' + [Guid]::NewGuid().ToString('N') + '.json')
+$temporaryReport = Join-Path ([System.IO.Path]::GetTempPath()) ('retrieval-comparison-' + [Guid]::NewGuid().ToString('N') + '.json')
 
 function docker.exe {
     $command = $args -join ' '
@@ -16,11 +16,11 @@ function docker.exe {
 function Invoke-RestMethod { return @{ status = 'ready' } }
 
 try {
-    $hash = (Get-FileHash -LiteralPath (Join-Path (Split-Path $PSScriptRoot -Parent) 'evaluations/v3/cases.jsonl') -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = (Get-FileHash -LiteralPath (Join-Path (Split-Path $PSScriptRoot -Parent) 'evaluations/retrieval/cases.jsonl') -Algorithm SHA256).Hash.ToLowerInvariant()
     @{ complete = $true; test_data_cleaned = $true; metrics = @{ observations = 192 }; cases_sha256 = $hash } |
         ConvertTo-Json | Set-Content -LiteralPath $temporaryReport -Encoding utf8
     try {
-        & (Join-Path $PSScriptRoot 'compare_local_v3_models.ps1') -SkipDownload -CurrentReport $temporaryReport
+        & (Join-Path $PSScriptRoot 'compare_local_retrieval_models.ps1') -SkipDownload -CurrentReport $temporaryReport
         throw 'Expected candidate warmup to fail.'
     } catch {
         if ($_.Exception.Message -notlike '*Model service failed: retrieval-evaluation*') { throw }

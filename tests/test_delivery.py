@@ -52,7 +52,7 @@ async def test_bound_receipt_real_import_and_failed_acceptance(client):
         approvals = (await approver.get(f"/api/approvals?run_id={run_id}")).json()["data"]
         approval = next(a for a in approvals if a["status"] == "pending")
         decided = await approver.post(f"/api/approvals/{approval['id']}/decision", headers={"Idempotency-Key": str(uuid.uuid4())}, json={"decision": "approved", "expected_version": approval["version"]})
-        assert decided.json()["data"]["run_status"] == "failed"  # 1 actual member != 80 required
+        assert decided.json()["data"]["run_status"] == "blocked"  # 1 actual member != 80 required
         async with SessionLocal() as session:
             run = await session.get(AgentRun, run_id)
             job = await session.get(ImportJob, job_id)

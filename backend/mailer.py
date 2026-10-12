@@ -3,8 +3,10 @@ from __future__ import annotations
 import asyncio
 import smtplib
 from email.message import EmailMessage
+from typing import cast
 
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -56,12 +58,16 @@ async def flush_mail() -> None:
                 claimed = await session.execute(update(MailDelivery).where(
                     MailDelivery.id == identifier, MailDelivery.status == "queued",
                 ).values(status="sending", attempts=MailDelivery.attempts + 1))
-                if not claimed.rowcount:
+                if not cast(CursorResult, claimed).rowcount:
                     continue
                 await session.commit()
                 item = await session.get(MailDelivery, identifier)
+                if item is None:
+                    continue
                 try:
-                    await asyncio.to_thread(smtp_send, item)
+                    from backend.observability import span
+                    with span("mail.smtp", delivery_id=identifier):
+                        await asyncio.to_thread(smtp_send, item)
                     item.status, item.body = "sent", ""
                 except Exception as exc:
                     # SMTP can accept DATA before the connection fails. Neither

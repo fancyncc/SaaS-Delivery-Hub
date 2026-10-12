@@ -48,7 +48,7 @@ class PGAnyVector(PGVector):
         return 'VECTOR'
 
 
-class V3Vector(Vector1024):
+class FlexibleVector(Vector1024):
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
@@ -56,5 +56,5 @@ class V3Vector(Vector1024):
 
     def process_bind_param(self, value, dialect):
         if value is not None and len(value) not in (512,1024):
-            raise ValueError('V3 model profiles support 512 or 1024 dimensions')
+            raise ValueError('Knowledge model profiles support 512 or 1024 dimensions')
         return json.dumps(value) if value is not None and dialect.name == 'postgresql' else value

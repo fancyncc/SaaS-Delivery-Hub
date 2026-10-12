@@ -154,7 +154,7 @@ class ImplementationGraphState(BaseModel):
     model_config = ConfigDict(use_enum_values=True)
     project_id: UUID
     run_id: UUID
-    engine_version: str = "legacy"
+
     agent: AgentState = Field(default_factory=AgentState)
     current_node: str = "create_project"
     status: RunStatus = RunStatus.RUNNING

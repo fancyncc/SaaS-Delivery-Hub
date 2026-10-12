@@ -7,7 +7,7 @@ from pathlib import Path
 from backend.knowledge import retrieve
 from backend.rag import search
 
-DATASET = Path(__file__).resolve().parents[1] / "evaluations/rag_v2.jsonl"
+DATASET = Path(__file__).resolve().parents[1] / "evaluations/retrieval_baseline.jsonl"
 
 
 async def evaluate_retrieval(session, tenant_id: str, path: Path = DATASET) -> dict:

@@ -134,7 +134,7 @@ async def embeddings(texts: list[str], *, query=False, _settings=None) -> list[l
                 response.raise_for_status()
                 try:
                     if _settings is not None and (response.json().get('model') != s.embedding_model or response.json().get('revision') != s.embedding_revision):
-                        raise ValueError('V3 embedding model identity')
+                        raise ValueError('Knowledge embedding model identity')
                     rows = response.json()["data"]
                     if (any(type(row["index"]) is not int for row in rows)
                             or sorted(row["index"] for row in rows) != list(range(len(batch)))):

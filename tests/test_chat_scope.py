@@ -57,12 +57,12 @@ def test_offline_json_is_evidence_only_and_status_is_readable():
 
 
 async def test_new_topic_does_not_inherit_previous_project(client, monkeypatch):
-    from backend import chat_routes
+    from backend import chat_mcp
     captured = []
     async def fake_evidence(session, row, user, query, schema):
         captured.append(query)
         return []
-    monkeypatch.setattr(chat_routes, 'evidence', fake_evidence)
+    monkeypatch.setattr(chat_mcp, 'evidence', fake_evidence)
     chat = (await send(client, await new_chat(client), 'XL-104现在完成了吗')).json()['data']
     await send(client, chat, 'XL-105验收要求是什么')
     assert captured[-1] == 'XL-105验收要求是什么'

@@ -18,6 +18,8 @@ class ChatConversation(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     messages: Mapped[list] = mapped_column(JSON, default=list)
     documents: Mapped[list] = mapped_column(JSON, default=list)
+    tool_state: Mapped[dict] = mapped_column(JSON, default=dict, server_default="{}")
+    tool_state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class ChatMemory(Base):
@@ -43,7 +45,7 @@ class ChatContextSnapshot(Base):
     summary: Mapped[list] = mapped_column(JSON, default=list)
     generation: Mapped[int] = mapped_column(Integer, default=1)
     mode: Mapped[str] = mapped_column(String(24), default="extractive")
-    producer_version: Mapped[str] = mapped_column(String(32), default="context-v1")
+    producer_version: Mapped[str] = mapped_column(String(32), default="conversation-context")
 
 
 class ChatContextTask(Base):
@@ -58,6 +60,8 @@ class ChatContextTask(Base):
     lease_until: Mapped[float] = mapped_column(Float, default=0)
     lease_token: Mapped[str] = mapped_column(String(36), default="")
     error_code: Mapped[str] = mapped_column(String(40), default="")
+    queued_at: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    consumer_seen_at: Mapped[float] = mapped_column(Float, default=0, server_default="0")
 
 
 class ChatMessage(Base):
@@ -83,6 +87,13 @@ class ChatHistoryMigration(Base):
     source_digest: Mapped[str] = mapped_column(String(64))
     turn_count: Mapped[int] = mapped_column(Integer)
     activated: Mapped[bool] = mapped_column(Boolean, default=False)
+    append_digest: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    index_identity: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    index_status: Mapped[str] = mapped_column(String(24), default="pending", server_default="pending")
+    index_attempts: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    index_next_attempt: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    index_lease_until: Mapped[float] = mapped_column(Float, default=0, server_default="0")
+    index_lease_token: Mapped[str] = mapped_column(String(36), default="", server_default="")
 
 
 class MemoryItem(Base):

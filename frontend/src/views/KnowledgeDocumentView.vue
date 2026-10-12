@@ -25,7 +25,7 @@ async function load() {
 }
 async function retryIndex() {
   try {
-    await api(`/api/knowledge/${route.params.id}/v3-index`, {method:'POST', headers:writeHeaders()})
+    await api(`/api/knowledge/${route.params.id}/reindex`, {method:'POST', headers:writeHeaders()})
     await load()
   } catch (e: any) { error.value = e.message }
 }
@@ -46,7 +46,7 @@ watch(() => route.params.id, load, { immediate: true })
     <div v-if="document" class="reader-layout"><aside class="reader-sidebar"><span class="eyebrow">DOCUMENT INFO</span><h2>文档信息</h2>
       <p>版本 {{ document.version }} · {{ document.project_id ? '项目私有文档' : '公司通用文档' }} · {{ document.active ? '启用中' : '已停用，不用于新检索' }}</p>
       <p>来源：{{ document.source }} · 模块：{{ document.module }}</p><p>授权说明：{{ document.license }}</p>
-      <section v-if="document.v3"><h3>解析与索引</h3><p>{{phaseLabels[document.v3.phase] || '等待索引'}} · {{document.v3.filename}}</p><p v-if="document.v3.error" role="alert">{{document.v3.error}}</p><p v-for="warning in document.v3.warnings" :key="warning" role="status">{{warning}}</p><button v-if="document.can_reindex" class="secondary" @click="retryIndex">重新解析与索引</button> <button class="secondary" @click="load">刷新解析状态</button></section>
+      <section v-if="document.index"><h3>解析与索引</h3><p>{{phaseLabels[document.index.phase] || '等待索引'}} · {{document.index.filename}}</p><p v-if="document.index.error" role="alert">{{document.index.error}}</p><p v-for="warning in document.index.warnings" :key="warning" role="status">{{warning}}</p><button v-if="document.can_reindex" class="secondary" @click="retryIndex">重新解析与索引</button> <button class="secondary" @click="load">刷新解析状态</button></section>
       <p v-else-if="document.index_error" role="alert">{{document.index_error}}</p>
       <button class="secondary" @click="download">下载提取文本（Markdown）</button>
       <nav class="reader-toc"><h3>内容目录</h3><a v-for="s in sections" :key="s.id" :href="`#${s.id}`">{{s.title}}</a></nav></aside><article class="panel reader-paper">

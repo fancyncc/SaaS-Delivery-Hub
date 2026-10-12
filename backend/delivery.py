@@ -38,7 +38,13 @@ def digest(value: object) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-async def document(session: AsyncSession, project: Project) -> dict:
+async def document(session: AsyncSession, project: Project, run: AgentRun | None = None) -> dict:
+    from backend.run_snapshots import audit_scope
+    from backend.run_snapshots import document as snapshot_document
+    scope = audit_scope.get()
+    effective_run = run or (scope[1] if scope and scope[1].project_id == project.id else None)
+    if effective_run:
+        return await snapshot_document(session, effective_run, project)
     item = await session.scalar(select(ProjectDocument).where(ProjectDocument.project_id == project.id))
     return item.content if item else {}
 
@@ -57,12 +63,14 @@ async def workspace(session: AsyncSession, project: Project) -> SaaSWorkspace:
     return item
 
 
-async def migration_required(session: AsyncSession, project: Project) -> bool:
-    doc = await document(session, project)
+async def migration_required(session: AsyncSession, project: Project, run: AgentRun | None = None) -> bool:
+    doc = await document(session, project, run)
     scope = str(doc.get("migration_scope", "")).strip()
     if scope in {"无", "无需迁移", "不迁移"}:
         return False
-    return bool(scope) or any(word in project.requirements_text.lower() for word in ("csv", "导入", "迁移"))
+    from backend.run_snapshots import requirements
+    text = await requirements(session, run, project) if run else project.requirements_text
+    return bool(scope) or any(word in text.lower() for word in ("csv", "导入", "迁移"))
 
 
 def csv_rows(job: ImportJob) -> list[dict]:
@@ -82,12 +90,17 @@ async def validate_csv(session: AsyncSession, project: Project, text: str) -> di
         return result
     ws = await workspace(session, project)
     candidate = ImportJob(csv_text=text, validation=result)
+    existing = list(await session.scalars(select(SaaSMember).where(SaaSMember.workspace_id == ws.id)))
+    return validate_target_rows(result, csv_rows(candidate), ws.configuration, existing)
+
+
+def validate_target_rows(result: dict, rows: list[dict], configuration: dict, members: list) -> dict:
     errors = result["errors"]
     if not result["row_count"]:
         errors.append({"row": 1, "field": "file", "message": "CSV 没有成员数据", "suggestion": "添加成员行"})
-    existing = {m.email: m for m in (await session.scalars(select(SaaSMember).where(SaaSMember.workspace_id == ws.id))).all()}
-    for number, row in enumerate(csv_rows(candidate), 2):
-        for field, allowed in (("department", ws.configuration["departments"]), ("role", ROLES)):
+    existing = {m.email: m for m in members}
+    for number, row in enumerate(rows, 2):
+        for field, allowed in (("department", configuration["departments"]), ("role", ROLES)):
             if row[field] not in allowed:
                 errors.append({"row": number, "field": field, "message": "目标系统不存在该部门或角色", "suggestion": "可选值：" + ", ".join(allowed)})
         if any(len(row[field]) > limit for field, limit in (("name", 120), ("email", 160), ("department", 120), ("role", 40))):
@@ -128,10 +141,24 @@ async def material(session: AsyncSession, project: Project, run: AgentRun, state
         if job and (job.run_id != run.id or job.project_id != project.id or job.tenant_id != project.tenant_id):
             raise HTTPException(409, "导入材料不属于本次执行")
         body = {"job_id": job.id, "source_hash": job.source_hash, "validation": job.validation} if job else {"skipped": True, "reason": "项目无需成员迁移"}
+        if job and run.snapshot_version:
+            if hashlib.sha256(job.csv_text.encode()).hexdigest() != job.source_hash:
+                raise HTTPException(409, "导入文件完整性校验失败")
+            body = {**body, "csv_text": job.csv_text}
     else:
         report = await go_live_checks(session, project, run, state)
         body = report.model_dump()
-    return {"project_id": project.id, "run_id": run.id, "kind": kind, "body": body, "material_hash": digest(body)}
+    result = {"project_id": project.id, "run_id": run.id, "kind": kind, "body": body, "material_hash": digest(body)}
+    from backend.run_snapshots import inputs
+    snapshot = await inputs(session, run)
+    if snapshot:
+        result["input_snapshot"] = {"id": snapshot.id, "hash": snapshot.content_hash}
+    return result
+
+
+async def approval_material(session: AsyncSession, project: Project, run: AgentRun, state: ImplementationGraphState, kind: str) -> dict:
+    from backend.run_snapshots import seal
+    return await seal(session, run, await material(session, project, run, state, kind))
 
 
 async def require_receipt(session: AsyncSession, project: Project, run: AgentRun, state: ImplementationGraphState, kind: str, approval_id: str | None = None) -> Approval:
@@ -140,7 +167,8 @@ async def require_receipt(session: AsyncSession, project: Project, run: AgentRun
         query = query.where(Approval.id == approval_id)
     approval = await session.scalar(query.order_by(Approval.created_at.desc()))
     current = await material(session, project, run, state, kind)
-    if not approval or approval.payload != current:
+    from backend.run_snapshots import matches
+    if not approval or not await matches(session, run, approval.payload, current):
         raise HTTPException(403, "需要与当前项目、Run 和材料完全匹配的有效批准")
     return approval
 
@@ -231,15 +259,22 @@ async def training(session: AsyncSession, project: Project, run: AgentRun) -> di
         text = f"# {project.customer_name} · {title}\n\n{body}\n\n## 本项目配置\n\n```json\n{json.dumps(ws.configuration, ensure_ascii=False, indent=2)}\n```\n\n来源：Run {run.id}，配置版本 {ws.version}。"
         item = await artifact(session, project, run, kind, title, text)
         ids.append(item.id)
+    from backend.method_reports import write
+    supplement = await write(session, project, run, "training_preparation", "角色培训与练习", {
+        "configuration": ws.configuration, "training_artifacts": ids}, [
+        {"title": "管理员练习", "guidance": "参与者：管理员。核对成员部门和角色，预览 CSV 并检查错误；预期：能解释错误与审批步骤。练习完成情况待人工验证。", "evidence_ids": ["configuration"]},
+        {"title": "成员练习", "guidance": "参与者：普通成员。按当前模板建立记录并推进状态；遇到权限不足联系管理员。预期：能完成本角色常用操作。未提供培训签到或实操结果，培训效果待验证。", "evidence_ids": ["configuration", "training_artifacts"]}])
+    if supplement:
+        ids.append(supplement.id)
     return {"artifact_ids": ids}
 
 
 async def go_live_checks(session: AsyncSession, project: Project, run: AgentRun, state: ImplementationGraphState) -> AcceptanceReport:
     ws = await workspace(session, project)
-    doc = await document(session, project)
+    doc = await document(session, project, run)
     members = (await session.scalars(select(SaaSMember).where(SaaSMember.workspace_id == ws.id))).all()
     job = await session.get(ImportJob, str(state.import_job_id)) if state.import_job_id else None
-    migration = await migration_required(session, project)
+    migration = await migration_required(session, project, run)
     plan = await session.scalar(select(Approval).where(Approval.run_id == run.id, Approval.kind == "plan", Approval.status == "approved"))
     artifacts = set((await session.scalars(select(ProjectArtifact.kind).where(ProjectArtifact.run_id == run.id))).all())
     checks = [

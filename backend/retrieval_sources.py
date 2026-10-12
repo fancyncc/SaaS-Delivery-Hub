@@ -63,7 +63,7 @@ async def register(session, *, tenant_id, kind, origin_id, title, body, version=
 
 
 async def sync_knowledge(session, document):
-    if document.index_status.startswith('v3_'):
+    if document.index_status.startswith('indexed_'):
         return None
     return await register(session, tenant_id=document.tenant_id, kind="knowledge", origin_id=document.id,
         title=document.title, body=document.body, version=document.version,
@@ -117,11 +117,11 @@ async def current(session, source):
         document = await session.get(KnowledgeDocument, source.origin_id)
         if not document or document.tenant_id != source.tenant_id or not document.active or document.project_id != source.project_id:
             return False
-        if document.index_status.startswith('v3_'):
+        if document.index_status.startswith('indexed_'):
             return False
         newer = await session.scalar(select(KnowledgeDocument.id).where(
             KnowledgeDocument.tenant_id == source.tenant_id, KnowledgeDocument.title == document.title,
-            KnowledgeDocument.index_status.not_like('v3_%'),
+            KnowledgeDocument.index_status.not_like('indexed_%'),
             KnowledgeDocument.version > document.version).limit(1))
         return not newer and source.version == str(document.version) and source.digest == digest(document.title, document.body)
     if source.kind == "conversation":

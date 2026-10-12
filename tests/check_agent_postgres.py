@@ -31,7 +31,6 @@ def prepare():
         version = connection.execute("SELECT extversion FROM pg_extension WHERE extname='vector'").fetchone()[0]
         assert tuple(int(x) for x in version.split('.')[:2]) >= (0, 8), version
     os.environ["DATABASE_URL"] = url.set(drivername="postgresql+psycopg", username="rag_test_app", password=None).render_as_string(hide_password=False)
-    os.environ["AGENT_ENGINE"] = "v2"
     os.environ["EXECUTION_MODE"] = "worker"
     os.environ["REDIS_URL"] = "redis://127.0.0.1:6399/15"
     return owner

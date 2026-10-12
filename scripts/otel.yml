@@ -4,6 +4,8 @@ receivers:
       http: {endpoint: "0.0.0.0:4318"}
 exporters:
   debug: {verbosity: basic}
+  otlphttp/tempo:
+    endpoint: http://tempo:4318
 processors:
   batch: {}
 service:
@@ -11,4 +13,4 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [debug]
+      exporters: [debug, otlphttp/tempo]

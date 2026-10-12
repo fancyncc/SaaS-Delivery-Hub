@@ -46,23 +46,70 @@ def test_evaluator_branches():
     assert evaluate(agent, milestone, obs).outcome == "pass"
 
 
-async def test_v2_preserves_approval_and_journals_actions(client, monkeypatch):
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+async def test_agent_preserves_approval_and_journals_actions(client, monkeypatch):
+
     p = await project(client)
     response = await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})
     assert response.status_code == 200, response.text
     data = response.json()["data"]
     detail = (await client.get(f"/api/runs/{data['id']}")).json()["data"]
     assert detail["status"] == "waiting_approval", detail
-    assert detail["state"]["engine_version"] == "v2"
+    assert "engine_version" not in detail["state"]
     assert len(detail["state"]["agent"]["completed"]) == 5
     async with SessionLocal() as session:
         actions = (await session.scalars(select(AgentAction).where(AgentAction.run_id == data["id"]))).all()
         assert len(actions) == 5 and all(a.status == "succeeded" for a in actions)
 
 
+async def test_result_reader_uses_current_run_and_context_keeps_dependency_receipt(client, monkeypatch):
+    from backend import agent_loop
+    from backend.agent_types import Criterion, Milestone, ToolAction
+    from backend.context_budget import count_tokens
+    from backend.schemas import ImplementationGraphState
+
+    p = await project(client)
+    run_id = (await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})).json()["data"]["id"]
+    async with SessionLocal() as session:
+        run = await session.get(AgentRun, run_id)
+        action = await session.scalar(select(AgentAction).where(AgentAction.run_id == run_id,
+            AgentAction.tool == "gap_analysis"))
+        action.result = {"receipt": "DEPENDENCY-RECEIPT", "large_body": "x" * 10000}
+        await session.flush()
+        state = ImplementationGraphState.model_validate(run.state)
+        state.agent.plan = default_plan("discovery")
+        state.agent.completed = [m.id for m in state.agent.plan.milestones[:-1]]
+        state.agent.observations = []
+        context = await agent_loop.context_for(session, run, state, "generate_implementation_plan")
+        assert any(o["action_id"] == action.id for o in context["observations"])
+        observation = next(o for o in context["observations"] if o["action_id"] == action.id)
+        assert observation["result"]["receipt"] == "DEPENDENCY-RECEIPT"
+        assert count_tokens(observation["result"]).tokens <= 512
+        milestone = Milestone(id="read_receipt", title="读取执行凭证", tool="read_action_result",
+            criteria=[Criterion(tool="read_action_result")])
+        state.agent.rounds += 1
+        response = await agent_loop.execute_action(session, run, state, milestone,
+            ToolAction(tool="read_action_result", arguments={"action_id": action.id, "max_chars": 100}))
+        assert response.status == "succeeded" and response.result["next_offset"] == 100
+        assert "DEPENDENCY-RECEIPT" in response.result["content"]
+        state.agent.rounds += 1
+        denied = await agent_loop.execute_action(session, run, state, milestone,
+            ToolAction(tool="read_action_result", arguments={"action_id": str(uuid.uuid4())}))
+        assert denied.status == "failed" and denied.result == {"error_code": "forbidden"}
+
+
+def test_workflow_boundaries_and_tool_permissions_share_one_definition():
+    from backend.agent_loop import REGISTRY, STAGES
+    from backend.workflow import APPROVAL_NODES, NODES
+    from backend.workflow_definition import DEFINITION
+    assert NODES == [node.name for node in DEFINITION]
+    assert set(APPROVAL_NODES) | {name for stage in STAGES.values() for name in stage} == set(NODES)
+    assert not set(APPROVAL_NODES) & set(REGISTRY)
+    assert REGISTRY["execute_import"].permission == "import.execute"
+    assert all(REGISTRY[name].risk == "high" for name in ("apply_configuration", "execute_import", "close_project"))
+
+
 async def test_budget_blocks_and_resume_preserves_completed_actions(client, monkeypatch):
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     monkeypatch.setattr(get_settings(), "agent_max_rounds", 1)
     p = await project(client)
     started = (await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})).json()["data"]
@@ -78,9 +125,9 @@ async def test_budget_blocks_and_resume_preserves_completed_actions(client, monk
         assert len(actions) == 5
 
 
-async def test_v2_worker_duplicate_delivery(client, monkeypatch):
+async def test_agent_worker_duplicate_delivery(client, monkeypatch):
     from backend.worker import process_event
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     monkeypatch.setattr(get_settings(), "execution_mode", "worker")
     p = await project(client)
     started = (await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})).json()["data"]
@@ -99,8 +146,8 @@ async def test_transient_failure_recovers_and_verifies_memory(client, monkeypatc
     from backend import workflow
     from backend.agent_models import Experience
     from backend.memory import recall
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
-    original = workflow.advance_legacy
+
+    original = workflow.execute_workflow_node
     calls = 0
     async def fail_once(session, run, **kwargs):
         nonlocal calls
@@ -109,7 +156,7 @@ async def test_transient_failure_recovers_and_verifies_memory(client, monkeypatc
             if calls == 1:
                 raise TimeoutError("sensitive customer secret")
         return await original(session, run, **kwargs)
-    monkeypatch.setattr(workflow, "advance_legacy", fail_once)
+    monkeypatch.setattr(workflow, "execute_workflow_node", fail_once)
     p = await project(client)
     response = await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})
     assert response.status_code == 200, response.text
@@ -127,13 +174,13 @@ async def test_transient_failure_recovers_and_verifies_memory(client, monkeypatc
 
 async def test_permanent_failure_replans_then_blocks(client, monkeypatch):
     from backend import workflow
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
-    original = workflow.advance_legacy
+
+    original = workflow.execute_workflow_node
     async def failing(session, run, **kwargs):
         if run.state["current_node"] == "collect_requirements":
             raise TimeoutError("unavailable")
         return await original(session, run, **kwargs)
-    monkeypatch.setattr(workflow, "advance_legacy", failing)
+    monkeypatch.setattr(workflow, "execute_workflow_node", failing)
     p = await project(client)
     response = await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})
     assert response.status_code == 200, response.text
@@ -144,9 +191,9 @@ async def test_permanent_failure_replans_then_blocks(client, monkeypatch):
     assert detail["state"]["agent"]["evaluation"]["outcome"] == "blocked"
 
 
-async def test_v2_full_approval_chain_and_failed_acceptance(client, monkeypatch):
+async def test_agent_full_approval_chain_and_failed_acceptance(client, monkeypatch):
     from test_delivery import preparing
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     p, run_id, approver = await preparing(client)
     try:
         response = await client.post("/api/imports/validate", headers={"Idempotency-Key": str(uuid.uuid4())}, json={"project_id": p["id"], "run_id": run_id, "csv_text": "name,email,department,role\nA,a@example.com,设计部,admin"})
@@ -164,7 +211,7 @@ async def test_v2_full_approval_chain_and_failed_acceptance(client, monkeypatch)
 
 async def test_generator_unknown_arguments_cannot_execute(client, monkeypatch):
     from backend import agent_loop
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     monkeypatch.setattr(get_settings(), "model_mode", "real")
     async def malicious(task, source, schema):
         if schema is StagePlan:
@@ -203,7 +250,7 @@ async def test_nested_model_budget_is_checked_before_request(monkeypatch):
 
 async def test_resume_rechecks_original_actor_and_version(client, monkeypatch):
     from backend.models import TenantMembership
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     monkeypatch.setattr(get_settings(), "agent_max_rounds", 1)
     p = await project(client)
     result = (await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})).json()["data"]
@@ -218,9 +265,9 @@ async def test_resume_rechecks_original_actor_and_version(client, monkeypatch):
     assert response.status_code in {401, 403, 404}
 
 
-async def test_v2_personal_project_completes_all_approvals(client, monkeypatch):
+async def test_agent_personal_project_completes_all_approvals(client, monkeypatch):
     from test_open_registration import test_personal_complete_workflow_and_company_isolation
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     await test_personal_complete_workflow_and_company_isolation(client)
 
 
@@ -228,7 +275,7 @@ async def test_hybrid_planner_can_insert_three_search_actions(client, monkeypatc
     from backend import agent_loop, workflow
     from backend.agent_types import Criterion, Milestone
     settings = get_settings()
-    monkeypatch.setattr(settings, "agent_engine", "v2")
+
     monkeypatch.setattr(settings, "model_mode", "real")
     async def model(task, source, schema):
         if schema is StagePlan:
@@ -240,14 +287,14 @@ async def test_hybrid_planner_can_insert_three_search_actions(client, monkeypatc
         actions = [{"tool": tool, "arguments": {"query": q}} for q in ("成员权限", "导入模板", "上线验收")] if tool == "knowledge_search" else [{"tool": tool}]
         return ActionBatch.model_validate({"actions": actions})
     monkeypatch.setattr(agent_loop, "structured", model)
-    original = workflow.advance_legacy
+    original = workflow.execute_workflow_node
     async def deterministic_business(session, run, **kwargs):
         settings.model_mode = "deterministic"
         try:
             return await original(session, run, **kwargs)
         finally:
             settings.model_mode = "real"
-    monkeypatch.setattr(workflow, "advance_legacy", deterministic_business)
+    monkeypatch.setattr(workflow, "execute_workflow_node", deterministic_business)
     p = await project(client)
     result = (await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})).json()["data"]
     assert result["status"] == "waiting_approval", result

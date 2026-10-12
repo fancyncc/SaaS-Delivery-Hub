@@ -19,7 +19,9 @@ def key(item) -> str:
 
 async def persist(item) -> None:
     if get_settings().storage_backend == "s3":
-        await asyncio.to_thread(client().put_object, Bucket=get_settings().s3_bucket, Key=key(item), Body=item.content.encode(), ContentType="text/markdown; charset=utf-8")
+        from backend.observability import span
+        with span("storage.put"):
+            await asyncio.to_thread(client().put_object, Bucket=get_settings().s3_bucket, Key=key(item), Body=item.content.encode(), ContentType="text/markdown; charset=utf-8")
 
 
 async def read(item) -> str:
@@ -27,8 +29,10 @@ async def read(item) -> str:
     if get_settings().storage_backend != "s3":
         return item.content
     try:
-        response = await asyncio.to_thread(client().get_object, Bucket=get_settings().s3_bucket, Key=key(item))
-        value = (await asyncio.to_thread(response["Body"].read)).decode()
+        from backend.observability import span
+        with span("storage.get"):
+            response = await asyncio.to_thread(client().get_object, Bucket=get_settings().s3_bucket, Key=key(item))
+            value = (await asyncio.to_thread(response["Body"].read)).decode()
         if digest(value) != item.checksum:
             raise ValueError("checksum mismatch")
         return value

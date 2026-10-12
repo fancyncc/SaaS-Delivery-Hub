@@ -26,7 +26,7 @@ from tests.test_chat import new_chat, send
     ('批量邀请公司成员激活登录账号', 'company-members'),
     ('培训交付物下载和验收报告', 'delivery'),
     ('执行失败取消重试以及blocked恢复', 'recovery'),
-    ('如何配置真实LLM模型和v2智能体', 'agent'),
+    ('如何配置真实LLM模型和实施智能体', 'agent'),
     ('知识库向量索引重建与资料版本', 'knowledge'),
     ('聊天附件PDF和长期记忆限制', 'chat'),
     ('跨公司协作与限时支持授权', 'collaboration'),

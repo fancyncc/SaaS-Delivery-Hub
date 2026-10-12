@@ -49,7 +49,7 @@ async def runtime_evidence(session, user, query: str, project_id: str | None) ->
         if 'run.view' in permissions:
             run = await session.scalar(select(AgentRun).where(AgentRun.project_id == project.id).order_by(AgentRun.run_number.desc()).limit(1))
             if run:
-                item['run'] = {"number": run.run_number, "status": run.status, "node": run.current_node, "engine": run.state.get('engine_version', 'legacy'), "page": f"/app/runs/{run.id}"}
+                item['run'] = {"number": run.run_number, "status": run.status, "node": run.current_node, "page": f"/app/runs/{run.id}"}
                 if run.state.get('blocking_reason'):
                     item['run']['blocking_reason'] = str(run.state['blocking_reason'])[:500]
                 if 'approval.view' in permissions:

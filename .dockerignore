@@ -27,7 +27,7 @@ tests
 backups
 scripts/*
 !scripts/download_rag_models.py
-skills
+images_ref
 README.md
 
 # Python generated content
@@ -55,7 +55,6 @@ dist
 *.log
 data
 uploads
-knowledge/models
 logs
 
 # The API image does not use the frontend source tree

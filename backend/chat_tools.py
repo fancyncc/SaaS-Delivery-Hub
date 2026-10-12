@@ -17,7 +17,7 @@ class QueryArguments(BaseModel):
 
 
 async def tool_context(session, row, user, query, schema):
-    """At most two tool rounds. Output consists only of validated observations."""
+    """Two rounds by default, four with official web; scope is always server-owned."""
     s = get_settings()
     if s.model_api_style != "chat_completions" or s.model_mode != "real":
         result = await call_tool(session, user, "search_authorized_context", {"conversation_id": row.id, "query": query}, schema)
@@ -32,12 +32,23 @@ async def tool_context(session, row, user, query, schema):
     tool = {"type": "function", "function": {"name": "search_authorized_context",
         "description": "查询本轮固定授权范围内的资料和实时状态。可用更具体的关键词补充一次检索。",
         "parameters": QueryArguments.model_json_schema()}}
+    from backend.tool_registry import available
+    optional = available()
+    catalog = [tool] + [{"type": "function", "function": {"name": name,
+        "description": spec.description, "parameters": spec.parameters.model_json_schema()}}
+        for name, spec in optional.items() if row.project_id or spec.external]
+    sources, supplemental, internal_calls = [], [], 0
+    version = row.version
     messages = [{"role": "system", "content": "先调用检索工具。观察结果后，仅在缺少必要资料时再检索一次；资料足够则停止调用。"
         + DATA_BOUNDARY + "只读，不执行或声称执行业务动作。不要输出内部推理。"},
         {"role": "user", "content": query}]
+    if optional:
+        messages[0]["content"] += (" 可选业务工具只能检查当前绑定项目。官方工具仅用于明确要求最新官方信息或本轮产品资料不足的公开问题。"
+            "搜索结果摘要不能作为事实引用，需读取正文；资料服务失败时说明核验未完成。公开产品目录："
+            + json.dumps(s.official_products, ensure_ascii=False))
     async with httpx.AsyncClient(timeout=s.model_timeout) as client:
-        for round_number in range(1, 3):
-            payload = {"model": model, "stream": False, "messages": messages, "tools": [tool],
+        for round_number in range(1, 5 if s.official_web_enabled else 3):
+            payload = {"model": model, "stream": False, "messages": messages, "tools": catalog,
                 "tool_choice": {"type": "function", "function": {"name": "search_authorized_context"}} if round_number == 1 else "auto",
                 "max_tokens": min(1024, s.model_max_output_tokens)}
             reservation = preflight(payload)
@@ -62,14 +73,29 @@ async def tool_context(session, row, user, query, schema):
             if len(calls) != 1:
                 raise HTTPException(502, "模型工具调用超过本轮预算")
             call = calls[0]
-            if call["function"]["name"] != "search_authorized_context":
+            name = call["function"]["name"]
+            if name != "search_authorized_context" and (name not in optional or round_number == 1):
                 raise HTTPException(502, "模型请求了未授权工具")
-            args = QueryArguments.model_validate_json(call["function"]["arguments"])
-            # Original scope references survive all model-generated queries.
-            sources = await call_tool(session, user, call["function"]["name"],
-                {"conversation_id": row.id, "query": (query + "\n" + args.query)[:8000]}, schema)
-            yield {"sources": sources, "round": round_number, "tool": call["function"]["name"]}
+            if name == "search_authorized_context":
+                if internal_calls >= 2:
+                    raise HTTPException(502, "本轮内部检索额度已耗尽")
+                internal_calls += 1
+                args = QueryArguments.model_validate_json(call["function"]["arguments"])
+                sources = await call_tool(session, user, name,
+                    {"conversation_id": row.id, "query": (query + "\n" + args.query)[:8000]}, schema)
+                observation = sources
+            else:
+                args = optional[name].parameters.model_validate_json(call["function"]["arguments"])
+                observation = await call_tool(session, user, name,
+                    {"conversation_id": row.id, **args.model_dump(mode="json")}, schema)
+                supplemental.extend(observation.get("sources", []))
+                if name in {"check_project_brief", "preview_import"} or observation.get("result", {}).get("status") == "unavailable":
+                    supplemental.append({"id": f"tool-{name}-{round_number}", "title": optional[name].description,
+                        "kind": "tool_result", "source": "授权只读工具", "text": json.dumps(observation["result"], ensure_ascii=False)})
+            from backend.chat_mcp import authorized_conversation
+            await authorized_conversation(session, row.id, user, version=version)
+            yield {"sources": sources + supplemental, "round": round_number, "tool": name}
             if sources and sources[0].get("kind") == "scope":
                 return
             messages.append({"role": "assistant", "content": None, "tool_calls": calls})
-            messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(sources, ensure_ascii=False)})
+            messages.append({"role": "tool", "tool_call_id": call["id"], "content": json.dumps(observation, ensure_ascii=False)})

@@ -108,7 +108,7 @@ async def test_candidates_opt_in_conflict_confirmation_and_rejection(client):
     await drain(chat["id"])
     candidate = (await client.get('/api/chat/memory-candidates')).json()["data"][0]
     assert not (await client.get('/api/chat/memory-items')).json()["data"]
-    existing = (await client.post('/api/chat/memory-items', json={"key": "explicit_preference", "content": "旧内容"})).json()["data"]
+    existing = (await client.post('/api/chat/memory-items', json={"key": "preference.language", "content": "旧内容"})).json()["data"]
     path = f"/api/chat/memory-candidates/{candidate['id']}/accept"
     assert (await client.post(path, json={"expected_version": candidate["version"]})).status_code == 409
     assert (await client.post(path, json={"expected_version": candidate["version"], "replace_id": existing["id"], "replace_version": existing["version"]})).status_code == 200
@@ -161,7 +161,7 @@ def test_scoped_memory_migration_preserves_messages_and_legacy(monkeypatch):
 async def test_agent_lessons_require_registered_durable_validation(client, monkeypatch):
     from backend.agent_lessons import WORKFLOW_VERSION
     from backend.agent_models import AgentLesson
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
+
     monkeypatch.setattr(get_settings(), "agent_experience_enabled", True)
     p = await project(client)
     response = await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid4())})

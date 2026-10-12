@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api, writeHeaders } from '../api'
 import ProjectDocumentsView from './ProjectDocumentsView.vue'
 import ProjectTasks from '../components/ProjectTasks.vue'
+import ProjectBriefCheck from '../components/ProjectBriefCheck.vue'
 const tab = ref('overview')
 const route = useRoute(), project = ref<any>(null), form = ref<any>({}), departments = ref('')
 const router = useRouter()
@@ -64,6 +65,7 @@ function selectTab(next: 'overview' | 'documents' | 'tasks') {
         <div class="detail-section-title"><h2>{{editing ? '编辑项目资料' : '基本信息'}}</h2><span>版本 {{project.version}}</span></div>
         <div class="detail-fields"><label v-for="[key,label,type] in fields" :key="key"><span>{{label}}</span><input v-if="editing" v-model="form[key]" :type="type" :required="['name','customer_contact','contact_email','employee_count','target_go_live_date'].includes(key)" :min="type==='number'?1:undefined" :disabled="busy"><strong v-else>{{form[key] || '未填写'}}</strong></label><label><span>部门</span><input v-if="editing" v-model="departments" required :disabled="busy"><strong v-else>{{departments || '未填写'}}</strong></label></div>
         <section v-for="[key,label] in areas" :key="key" class="detail-text"><h2>{{label}}</h2><textarea v-if="editing" v-model="form[key]" :required="key==='requirements_text'" :minlength="key==='requirements_text'?20:undefined" :maxlength="key==='requirements_text'?10000:2000" rows="5" :disabled="busy"></textarea><p v-else>{{form[key] || '未填写'}}</p></section>
+        <ProjectBriefCheck v-if="editing" :draft="{...form,departments:departments.split(/[、，,]/).map(s=>s.trim()).filter(Boolean)}" />
         <footer v-if="editing" class="detail-footer"><p v-if="active">保存将取消当前执行与待审批项。已执行的操作不会自动撤销，修改后需重新启动执行。</p><div><button type="button" class="secondary" :disabled="busy" @click="load">放弃修改</button><button class="primary" :disabled="busy || (active && !project.permissions.includes('run.cancel'))">{{busy ? '正在保存…' : active ? '取消当前执行并保存修改' : '保存修改'}}</button></div><p v-if="active && !project.permissions.includes('run.cancel')">请有取消执行权限的成员先取消当前执行。</p></footer>
         <p v-if="!canEdit" class="muted">{{['completed','archived'].includes(project.lifecycle_status) ? '项目已完成或归档，资料以只读方式保留。' : '当前账号可查看项目，没有编辑权限。'}}</p>
       </form>

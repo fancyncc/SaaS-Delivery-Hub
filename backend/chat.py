@@ -249,18 +249,29 @@ async def answer_question(question: str, messages: list[dict], memory: str, sour
     model_input = {"question": question, "assistant_profile": profile(),
         "context": context if context is not None else conversation_context(messages, question, sources),
         "memory": memory, "evidence": [dict(source, number=i) for i, source in enumerate(sources, 1)]}
-    known = {s["id"]: s for s in sources}
     for attempt in range(2):
         instruction = answer_instructions()
         if attempt:
             instruction += "请复核正文中的每个 [编号]；citation_ids 必须且只能包含这些编号对应的 evidence id。"
         result = await intelligence.structured(instruction, model_input, ChatAnswer)
-        numbers = {int(number) for number in re.findall(r"\[(\d+)\]", result.answer)}
-        expected = {i for i, source in enumerate(sources, 1) if source["id"] in result.citation_ids}
-        if all(identifier in known for identifier in result.citation_ids) and numbers == expected:
-            return {"answer": result.answer, "citations": [dict(s, number=i) for i, s in enumerate(sources, 1)
-                if s["id"] in result.citation_ids], "mode": "llm"}
+        try:
+            citations = cited_sources(result.answer, sources, result.citation_ids)
+            return {"answer": result.answer, "citations": citations, "mode": "llm"}
+        except HTTPException:
+            pass
     raise HTTPException(422, "模型引用编号与来源不一致，请重试")
+
+
+def cited_sources(answer, sources, citation_ids=None):
+    numbers = {int(n) for n in re.findall(r"\[(\d+)\]", answer)}
+    if any(n < 1 or n > len(sources) for n in numbers):
+        raise HTTPException(422, "回答含无效引用，本次回答未保存")
+    if citation_ids is not None:
+        known = {s["id"] for s in sources}
+        expected = {i for i, s in enumerate(sources, 1) if s["id"] in citation_ids}
+        if not set(citation_ids) <= known or numbers != expected:
+            raise HTTPException(422, "模型引用编号与来源不一致，请重试")
+    return [dict(s, number=i) for i, s in enumerate(sources, 1) if i in numbers]
 
 
 def answer_instructions():

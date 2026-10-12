@@ -50,6 +50,14 @@ class StagePlan(StrictModel):
 
 class ToolArguments(StrictModel):
     query: str | None = Field(default=None, min_length=1, max_length=2000)
+    job_id: str | None = Field(default=None, max_length=36)
+    product: str | None = Field(default=None, max_length=64)
+    topic: str | None = Field(default=None, max_length=64)
+    version: str | None = Field(default=None, max_length=40)
+    reference: str | None = Field(default=None, max_length=4096)
+    action_id: str | None = Field(default=None, max_length=36)
+    offset: int | None = Field(default=None, ge=0)
+    max_chars: int | None = Field(default=None, ge=100, le=1000)
 
 
 class ToolAction(StrictModel):
@@ -83,6 +91,7 @@ class MemoryEntry(StrictModel):
 
 
 class AgentState(StrictModel):
+    tool_counts: dict[str, int] = Field(default_factory=dict)
     stage: str = ""
     plan_version: int = 0
     plan: StagePlan | None = None

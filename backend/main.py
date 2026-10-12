@@ -80,6 +80,10 @@ from backend.workflow import resume_after_approval
 async def lifespan(_: FastAPI):
     from backend.observability import setup
     setup()
+    from backend.db import engine
+    from backend.runtime_guard import check_runtime_role
+    async with engine.connect() as connection:
+        await check_runtime_role(connection)
     await init_db()
     await bootstrap_identity()
     task = None
@@ -87,7 +91,9 @@ async def lifespan(_: FastAPI):
         from backend.local_indexer import maintain_indexes
         task = asyncio.create_task(maintain_indexes())
     context_task = None
-    if get_settings().chat_context_local_worker and get_settings().chat_context_mode != "off":
+    settings = get_settings()
+    local_context_worker = settings.chat_context_local_worker if settings.chat_context_local_worker is not None else settings.execution_mode == "inline"
+    if local_context_worker and (settings.chat_context_mode != "off" or settings.chat_history_enabled):
         from backend.context_maintenance import maintain_local
         context_task = asyncio.create_task(maintain_local())
     try:
@@ -152,6 +158,9 @@ app.include_router(memory_router)
 from backend.chat_mcp import router as mcp_router
 
 app.include_router(mcp_router)
+from backend.tool_routes import router as tool_router
+
+app.include_router(tool_router)
 app.include_router(retrieval_status_router)
 
 
@@ -248,8 +257,8 @@ async def metrics():
     from prometheus_client import generate_latest
 
     from backend.db import SessionLocal
+    from backend.knowledge_index_models import IndexedDocument
     from backend.models import KnowledgeDocument, MailDelivery, WorkflowOutbox
-    from backend.rag_v3_models import V3Document
     lines = [generate_latest().decode(), "saas_agent_up 1"]
     async with SessionLocal() as session:
         for model, column, name in ((AgentRun, AgentRun.status, "saas_runs"), (Approval, Approval.status, "saas_approvals"), (ImportJob, ImportJob.status, "saas_imports"), (MailDelivery, MailDelivery.status, "saas_mail")):
@@ -273,12 +282,12 @@ async def metrics():
                     {"tenant_id": tenant_id},
                 )
             for phase, count in (await session.execute(
-                select(V3Document.phase, func.count()).group_by(V3Document.phase)
+                select(IndexedDocument.phase, func.count()).group_by(IndexedDocument.phase)
             )).all():
                 if phase in phases:
                     phases[phase] += count
             for filename, phase, document_metrics in (await session.execute(
-                select(V3Document.filename, V3Document.phase, V3Document.metrics)
+                select(IndexedDocument.filename, IndexedDocument.phase, IndexedDocument.metrics)
             )).all():
                 fmt = filename.rsplit(".", 1)[-1].lower()
                 if fmt not in binary_parse_ms:
@@ -290,21 +299,21 @@ async def metrics():
                         binary_parse_ms[fmt].append(parse_ms)
                     ocr_pages += document_metrics.get("ocr_pages", 0)
             tenant_oldest = await session.scalar(select(func.min(KnowledgeDocument.created_at))
-                .join(V3Document, V3Document.origin_id == KnowledgeDocument.id)
-                .where(V3Document.phase.in_(("pending", "parsing", "indexing"))))
+                .join(IndexedDocument, IndexedDocument.origin_id == KnowledgeDocument.id)
+                .where(IndexedDocument.phase.in_(("pending", "parsing", "indexing"))))
             if tenant_oldest and (oldest is None or tenant_oldest < oldest):
                 oldest = tenant_oldest
         for phase, count in phases.items():
-            lines.append(f'saas_rag_v3_documents{{phase="{phase}"}} {count}')
+            lines.append(f'saas_retrieval_documents{{phase="{phase}"}} {count}')
         for (fmt, phase), count in sorted(binary_counts.items()):
-            lines.append(f'saas_rag_v3_binary_documents{{format="{fmt}",phase="{phase}"}} {count}')
+            lines.append(f'saas_retrieval_binary_documents{{format="{fmt}",phase="{phase}"}} {count}')
         for fmt, values in binary_parse_ms.items():
             if values:
                 values.sort()
-                lines.append(f'saas_rag_v3_parse_p95_ms{{format="{fmt}"}} {values[math.ceil(len(values) * 0.95) - 1]}')
-        lines.append(f"saas_rag_v3_ocr_pages_indexed {ocr_pages}")
+                lines.append(f'saas_retrieval_parse_p95_ms{{format="{fmt}"}} {values[math.ceil(len(values) * 0.95) - 1]}')
+        lines.append(f"saas_retrieval_ocr_pages_indexed {ocr_pages}")
         age = max(0, (datetime.now(UTC) - oldest).total_seconds()) if oldest else 0
-        lines.append(f"saas_rag_v3_oldest_pending_seconds {age}")
+        lines.append(f"saas_retrieval_oldest_pending_seconds {age}")
     return "\n".join(lines) + "\n"
 
 
@@ -438,7 +447,9 @@ async def start_run(project_id: UUID, request: Request, key: str = Depends(idemp
     await session.flush()
     if get_settings().execution_mode == "inline":
         transition_run(run, RunLifecycle.RUNNING)
-    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status), engine_version=get_settings().agent_engine).model_dump(mode="json")
+    run.state = ImplementationGraphState(project_id=UUID(project.id), run_id=UUID(run.id), status=RunStatus(run.status)).model_dump(mode="json")
+    from backend.run_snapshots import capture
+    await capture(session, run, project)
     await session.flush()
     await dispatch(session, run)
     data = {"id": run.id, "run_number": run.run_number, "retry_of_run_id": run.retry_of_run_id,
@@ -517,7 +528,7 @@ async def resume_run(run_id: UUID, payload: ResumeRequest, request: Request, key
     if existing:
         return envelope(request, existing.response)
     locked = await session.scalar(select(AgentRun).where(AgentRun.id == str(run_id)).with_for_update().execution_options(populate_existing=True))
-    if not locked or locked.status != "blocked" or locked.state.get("engine_version") != "v2" or locked.version != payload.expected_version:
+    if not locked or locked.status != "blocked" or locked.version != payload.expected_version:
         raise HTTPException(409, "任务不可恢复或版本已变化，请刷新")
     run = locked
     await authorize(session, run, REGISTRY["create_project"])
@@ -548,10 +559,10 @@ async def get_run(run_id: UUID, request: Request, user: Principal = Depends(curr
     return envelope(request, {"id": run.id, "project_id": run.project_id,
                               "run_number": run.run_number, "retry_of_run_id": run.retry_of_run_id,
                               "status": run.status, "version": run.version,
-                              "current_node": run.current_node, "state": run.state,
+                              "current_node": run.current_node, "state": ImplementationGraphState.model_validate(run.state).model_dump(mode="json"),
                               "blocking_reason": run.state.get("blocking_reason"),
                               "allowed_actions": await run_actions(session, run, user),
-                              "trace_id": run.trace_id})
+                              "trace_id": run.trace_id, "snapshot_version": run.snapshot_version})
 
 
 @app.get("/api/runs/{run_id}/steps")
@@ -561,6 +572,33 @@ async def get_run_steps(run_id: UUID, request: Request, user: Principal = Depend
     return envelope(request, [{"id": x.id, "sequence": x.sequence, "node": x.node,
                                "status": x.status, "detail": x.detail,
                                "created_at": x.created_at.isoformat()} for x in rows])
+
+
+@app.get("/api/runs/{run_id}/snapshots")
+async def get_run_snapshots(run_id: UUID, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
+    from backend.run_snapshots import RunSnapshot, inputs, verify
+    run = await run_or_404(session, str(run_id), user)
+    await inputs(session, run)
+    rows = list(await session.scalars(select(RunSnapshot).where(RunSnapshot.run_id == run.id,
+                        RunSnapshot.tenant_id == run.tenant_id).order_by(RunSnapshot.sequence)))
+    for row in rows:
+        verify(row, run)
+    return envelope(request, {"version": run.snapshot_version,
+        "status": "protected" if run.snapshot_version else "unprotected",
+        "revisions": [{"id": row.id, "kind": row.kind, "sequence": row.sequence,
+                       "content_hash": row.content_hash, "created_at": row.created_at.isoformat()} for row in rows]})
+
+
+@app.get("/api/runs/{run_id}/snapshots/{snapshot_id}")
+async def get_run_snapshot(run_id: UUID, snapshot_id: UUID, request: Request, user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)):
+    from backend.run_snapshots import RunSnapshot, verify
+    run = await run_or_404(session, str(run_id), user)
+    item = await session.get(RunSnapshot, str(snapshot_id))
+    if item is None or item.run_id != run.id or item.tenant_id != run.tenant_id:
+        raise HTTPException(404, "执行快照不存在")
+    verify(item, run)
+    return envelope(request, {"id": item.id, "kind": item.kind, "content_hash": item.content_hash,
+                              "payload": item.payload})
 
 
 @app.get("/api/runs/{run_id}/actions")
@@ -657,7 +695,8 @@ async def decide(approval_id: UUID, payload: ApprovalDecision, request: Request,
         raise HTTPException(422, "驳回必须填写整改意见")
     if payload.decision == "approved":
         current = await delivery.material(session, project, run, ImplementationGraphState.model_validate(run.state), approval.kind)
-        if current != approval.payload:
+        from backend.run_snapshots import matches
+        if not await matches(session, run, approval.payload, current):
             raise HTTPException(409, "审批材料已变化，请取消本次执行并重新制定方案")
         if approval.kind == "acceptance" and not current["body"]["ready"]:
             raise HTTPException(409, "上线检查尚未通过")
@@ -735,7 +774,7 @@ async def run_actions(session: AsyncSession, run: AgentRun, user: Principal) -> 
     for action, permission, available in (
         ("upload_csv", "import.validate", run.status == "preparing_materials"),
         ("cancel", "run.cancel", run.status in {"pending", "running", "preparing_materials", "waiting_approval", "blocked"}),
-        ("resume", "run.retry", run.status == "blocked" and run.state.get("engine_version") == "v2"),
+        ("resume", "run.retry", run.status == "blocked"),
         ("approve", "approval.decide", run.status == "waiting_approval" and (run.started_by != user.user_id or personal_confirmation)),
         ("retry", "run.retry", run.status in {"failed", "cancelled"}),
     ):

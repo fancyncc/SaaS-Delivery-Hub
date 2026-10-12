@@ -1,8 +1,10 @@
-# SaaS Delivery Hub
+# SaaS 实施平台
+
+项目使用一套实施 Agent 和知识检索实现，功能按用途命名。
 
 面向企业 SaaS 上线实施的多租户项目交付与协作平台。
 
-SaaS Delivery Hub 将需求收集、实施计划、知识检索、配置变更、数据导入、培训、审批和上线验收组织到同一个可恢复、可审计的交付流程中。
+SaaS 实施平台 将需求收集、实施计划、知识检索、配置变更、数据导入、培训、审批和上线验收组织到同一个可恢复、可审计的交付流程中。
 
 > 当前仓库是一套可运行的参考实现，适合本地开发、功能验证和实施流程演示。默认配置使用确定性执行和离线检索；真实生成模型、向量检索、邮件服务及异步 Worker 需要单独配置和验收。
 
@@ -25,7 +27,7 @@ SaaS Delivery Hub 将需求收集、实施计划、知识检索、配置变更�
 
 ## 项目定位
 
-SaaS Delivery Hub 的核心定位是 **企业 SaaS 实施交付中枢**，服务于 SaaS 厂商实施团队、客户项目负责人、审批人和平台运营人员。
+SaaS 实施平台 的核心定位是 **企业 SaaS 实施交付中枢**，服务于 SaaS 厂商实施团队、客户项目负责人、审批人和平台运营人员。
 
 它不是通用项目管理工具，也不是单纯的 RAG 知识库。平台围绕“客户从签约后到正式上线”这一过程，提供四类能力：
 
@@ -105,21 +107,24 @@ flowchart TB
     API --> Auth[身份、权限与审计]
     API --> Project[项目协作与交付]
     API --> Chat[AI 助手与上下文]
-    API --> Workflow[实施流程引擎]
+    API --> Agent[实施 Agent]
+    Agent --> Workflow[业务节点与审批]
 
     Project --> DB[(PostgreSQL / SQLite)]
     Chat --> DB
+    Agent --> DB
     Workflow --> DB
 
     API --> Redis[(Redis)]
     Redis --> Worker[Celery Worker / Beat]
+    Worker --> Agent
     Worker --> DB
 
     Chat -. 可选 .-> Retrieval[本地 Embedding 与 Reranker]
-    Workflow -. 可选 .-> Retrieval
+    Agent -. 可选 .-> Retrieval
     Retrieval --> Search[(OpenSearch / pgvector)]
     Chat -. 可选 .-> Model[生成模型 API]
-    Workflow -. 可选 .-> Model
+    Agent -. 可选 .-> Model
 
     Metrics[Prometheus / Grafana] --> API
 ```
@@ -134,6 +139,7 @@ flowchart TB
 | API | FastAPI、Pydantic、SQLAlchemy Async、Uvicorn |
 | 数据库 | PostgreSQL 16、pgvector、Alembic；开发环境支持 SQLite |
 | 异步任务 | Celery、Redis、事务 Outbox |
+| 实施 Agent | 阶段内规划、工具调用与评价循环；业务代码校验；Worker 通过 LangGraph 调度 |
 | AI 与检索 | 兼容 OpenAI 风格的模型接口、BGE Embedding、BGE Reranker、OpenSearch |
 | 文档处理 | pypdf、PDFium、Tesseract OCR、python-pptx、openpyxl |
 | 可观测性 | Prometheus、Grafana、OpenTelemetry |
@@ -214,7 +220,7 @@ docker compose down
 
 ### 启用真实 RAG
 
-真实 RAG 需要本地检索模型、OpenSearch、索引 Worker 和对应配置。请先阅读 [本地 RAG 部署说明](docs/RAG_LOCAL_SETUP.md) 与 [CPU 检索说明](docs/RAG_CPU.md)，再启动 `rag`、`agent` 和 `model-setup` profiles。
+真实 RAG 需要本地检索模型、OpenSearch、索引 Worker 和对应配置。请先阅读 [本地 RAG 部署说明](docs/deployment.md#local-rag) 与 [CPU 检索说明](docs/deployment.md#cpu-retrieval)，再启动 `rag`、`agent` 和 `model-setup` profiles。
 
 不要仅通过修改 `RAG_MODE` 就将真实检索投入生产。模型版本、索引身份、重排服务、发布文件和人工评估结果必须保持一致。
 
@@ -292,7 +298,6 @@ pnpm dev
 | `MODEL_BASE_URL` | 空 | 生成模型服务地址 |
 | `MODEL_NAME` | `qwen-plus` | 生成模型名称示例 |
 | `MODEL_API_KEY` | 空 | 生成模型访问密钥 |
-| `AGENT_ENGINE` | `legacy` | 新建执行实例使用的流程引擎版本 |
 | `AGENT_TOKEN_BUDGET` | `120000` | 单次实施执行的累计模型预算上限 |
 
 ### 检索与上下文配置
@@ -300,7 +305,7 @@ pnpm dev
 | 变量 | 示例值 | 用途 |
 | --- | --- | --- |
 | `RAG_MODE` | `mock` | 离线检索或真实 RAG |
-| `RAG_V3_INDEXING_ENABLED` | `true` | 是否启用 V3 文档索引 |
+| `RETRIEVAL_INDEXING_ENABLED` | `true` | 是否启用 知识检索 文档索引 |
 | `RAG_PDF_ENABLED` | `true` | 是否允许 PDF 解析与索引 |
 | `RAG_OFFICE_ENABLED` | `true` | 是否允许 PPTX/XLSX 解析与索引 |
 | `CHAT_CONTEXT_MODE` | `off` | 新上下文策略的关闭、影子或启用模式 |
@@ -320,7 +325,7 @@ pnpm dev
 ├── config/                  # RAG 与检索服务配置模板
 ├── docs/                    # 产品、架构、部署和运维文档
 ├── evaluations/             # 检索与上下文评估数据和报告
-├── knowledge/               # 本地模型及知识资料说明
+├── data/                    # 本地模型缓存与评测运行记录，不入版本控制
 ├── scripts/                 # 部署、备份、恢复、验证和评估脚本
 ├── skills/                  # 实施文书 Skill 与结构化模板
 ├── tests/                   # 单元、集成、浏览器和数据库验收测试
@@ -373,6 +378,8 @@ pnpm build
 
 检索质量评估位于 `evaluations/`。自动化指标主要用于回归诊断；在独立人工复核、真实客户资料验证和生成回答评分完成前，不应将其解释为生产质量承诺。
 
+公开数据集指标检测可使用 [CMRC 2018 评测工具](docs/testing.md#cmrc-benchmark)，自动下载固定版本、准备题库、运行真实检索和生成，并按官方规则计算 EM/F1、答案位置命中率、延迟和 Token。无需自行人工标注题库；[200 题实测结果](docs/evaluation_report.md#cmrc-20261012)与原始记录可用于后续版本对比。
+
 ## 部署与安全边界
 
 `docker-compose.yml` 面向本地开发和功能验证，不是可以直接暴露到公网的生产配置。正式部署至少需要：
@@ -389,19 +396,18 @@ pnpm build
 
 ## 项目文档
 
+`docs/` 按下列八个主题维护。操作方法与实测报告分别归档；评测题库、原文快照和运行数据保留在 `evaluations/` 与 `data/evaluations/`。
+
 | 文档 | 内容 |
 | --- | --- |
-| [项目协作](docs/PROJECT_COLLABORATION.md) | 项目文档、任务流转和成果审批 |
-| [交付实现](docs/DELIVERY_IMPLEMENTATION.md) | 配置、导入、交付物和验收实现边界 |
-| [AI 助手](docs/AI_CHAT.md) | 对话、附件、项目资料和引用机制 |
-| [聊天工具链](docs/CHAT_AGENT.md) | 流式回答、工具调用、MCP 和授权检索 |
-| [上下文与记忆](docs/CONTEXT_MEMORY.md) | 摘要、历史召回、记忆和预算策略 |
-| [流程引擎与 RAG](docs/AGENT_RAG.md) | 阶段内规划、恢复、经验和混合检索 |
-| [二进制文档](docs/RAG_BINARY_DOCUMENTS.md) | PDF、OCR、PPTX 和 XLSX 处理 |
-| [本地 RAG](docs/RAG_LOCAL_SETUP.md) | 本地模型、OpenSearch 与索引部署 |
-| [预生产运行手册](docs/PREPRODUCTION_RUNBOOK.md) | 隔离部署、初始化、备份和验证 |
-| [生产安全审查](docs/PRODUCTION_SAFETY_REVIEW.md) | 上线前安全边界与检查项 |
-| [仓库结构](docs/REPOSITORY_LAYOUT.md) | 目录职责和清理边界 |
+| [agent.md](docs/agent.md) | 实施 Agent、聊天、上下文与记忆、Tools/Skills、平台助手 |
+| [api.md](docs/api.md) | 当前接口索引、权限协议、注册邀请与项目协作 |
+| [architecture.md](docs/architecture.md) | 系统组件、仓库布局、产品需求和后续 CRM 设计 |
+| [data_pipeline.md](docs/data_pipeline.md) | 原件解析、格式限制、索引、CSV 和评测数据处理 |
+| [deployment.md](docs/deployment.md) | 模型缓存、本地/预生产部署、迁移、备份恢复与故障处理 |
+| [evaluation_report.md](docs/evaluation_report.md) | CMRC 实测、工程验收、隔离恢复和历史检索报告及限制 |
+| [rag.md](docs/rag.md) | 范围过滤、混合检索、重排、证据组装与引用边界 |
+| [testing.md](docs/testing.md) | 回归检查、CMRC 操作、质量评测协议和题库复核 |
 
 ## 参与贡献
 

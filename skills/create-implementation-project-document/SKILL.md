@@ -1,6 +1,8 @@
 ---
 name: create-implementation-project-document
 description: Create, review, or normalize a structured SaaS customer implementation project brief for onboarding, configuration, data migration, training, go-live, and acceptance. Use when drafting a new implementation project, converting loose customer notes into required and optional fields, checking whether an implementation brief is complete, or preparing project inputs for the implementation Agent.
+metadata:
+  version: "1"
 ---
 
 # Create Implementation Project Document
@@ -25,6 +27,7 @@ Produce an implementation brief that is complete enough for Agent planning and h
 - Use exact employee counts when supplied; otherwise mark them `待补充`.
 - Keep optional fields present but empty when the output must match the API payload.
 - State assumptions explicitly and keep them out of confirmed facts.
+- A draft may contain unknown values. Do not put `待补充` into typed date or integer API fields; return null and a missing-field list until the customer supplies the facts. Use check_project_brief before constructing a ProjectCreate submission.
 - Do not include credentials, production secrets, or unnecessary personal data.
 
 ## Completeness Checklist

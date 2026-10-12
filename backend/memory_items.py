@@ -85,16 +85,18 @@ async def sync_legacy(session, user, content, version):
 async def effective_memory(session, user, conversation, legacy):
     if not get_settings().chat_memory_items_enabled:
         return legacy
-    rows = list(await session.scalars(select(MemoryItem).where(visible(user), MemoryItem.status == "active",
-        or_(MemoryItem.expires_at.is_(None), MemoryItem.expires_at > time.time()))))
     allowed = {("user", user.user_id), ("workspace", user.tenant_id), ("conversation", conversation.id)}
     if conversation.project_id:
         allowed.add(("project", conversation.project_id))
+    rows = list(await session.scalars(select(MemoryItem).where(visible(user), MemoryItem.status == "active",
+        or_(MemoryItem.expires_at.is_(None), MemoryItem.expires_at > time.time()),
+        or_(*[(MemoryItem.scope == scope) & (MemoryItem.scope_id == identifier) for scope, identifier in allowed]))))
     priority = {"user": 0, "workspace": 1, "project": 2, "conversation": 3}
     selected = {}
     for item in sorted(rows, key=lambda r: priority[r.scope]):
         if (item.scope, item.scope_id) in allowed:
-            selected[item.key] = {"scope": item.scope, "key": item.key, "content": item.content}
+            selected[item.key] = {"id": item.id, "version": item.version, "scope": item.scope,
+                "key": item.key, "content": item.content, "source": item.source}
     if "__legacy_workspace__" not in selected and legacy:
         selected["__legacy_workspace__"] = {"scope": "workspace", "content": legacy}
     import json
@@ -222,6 +224,31 @@ async def update_preferences(payload: PreferenceUpdate, user: Principal = Depend
     return await preferences(user, session)
 
 
+def candidate_parts(text):
+    if not re.match(r"^(请记住[：:]?|以后请|我的偏好是|我是)", text) or len(text) > 1000:
+        return []
+    parts = []
+    for quote in re.split(r"[；;。\n]", text):
+        quote = quote.strip()
+        if not quote:
+            continue
+        category = "background" if quote.startswith("我是") else "preference"
+        if category == "background":
+            key = "background.role" if re.search(r"负责人|工程师|经理|顾问|管理员|开发|实施", quote) else "background." + digest(quote)[:20]
+        elif re.search(r"中文|英文|英语|汉语", quote):
+            key = "preference.language"
+        elif re.search(r"先.*结论|结论.*先|先.*结果", quote):
+            key = "preference.answer_order"
+        elif re.search(r"简洁|详细|简短|字数|长篇", quote):
+            key = "preference.detail"
+        elif re.search(r"表格|列表|Markdown|markdown|格式|分点", quote):
+            key = "preference.format"
+        else:
+            key = "preference." + digest(quote)[:20]
+        parts.append((category, key, quote))
+    return parts
+
+
 async def extract_candidates(session, row, messages):
     s = get_settings()
     if not s.chat_memory_candidates_enabled or not s.chat_memory_items_enabled:
@@ -233,20 +260,16 @@ async def extract_candidates(session, row, messages):
     if not preference or not preference.auto_extract:
         return
     for message in messages:
-        quote = message["text"].strip()
-        # Deliberately allowlisted explicit self-description/preferences, no model inference.
-        if not re.match(r"^(请记住[：:]?|以后请|我的偏好是|我是)", quote) or len(quote) > 1000:
-            continue
-        category = "background" if quote.startswith("我是") else "preference"
-        key = "self_description" if category == "background" else "explicit_preference"
-        fingerprint = digest([re.sub(r"\s+", " ", quote).casefold(), "workspace"])
-        exists = await session.scalar(select(MemoryCandidate.id).where(MemoryCandidate.tenant_id == row.tenant_id,
-            MemoryCandidate.user_id == row.user_id, MemoryCandidate.fingerprint == fingerprint))
-        if not exists:
-            session.add(MemoryCandidate(tenant_id=row.tenant_id, user_id=row.user_id, conversation_id=row.id,
-                source_message_id=message["id"], fingerprint=fingerprint, content=quote, category=category, key=key,
-                expires_at=time.time() + 30 * 86400))
-            await session.flush()
+        # Explicit user preferences only; every part remains an exact source quote.
+        for category, key, quote in candidate_parts(message["text"].strip()):
+            fingerprint = digest([re.sub(r"\s+", " ", quote).casefold(), "workspace"])
+            exists = await session.scalar(select(MemoryCandidate.id).where(MemoryCandidate.tenant_id == row.tenant_id,
+                MemoryCandidate.user_id == row.user_id, MemoryCandidate.fingerprint == fingerprint))
+            if not exists:
+                session.add(MemoryCandidate(tenant_id=row.tenant_id, user_id=row.user_id, conversation_id=row.id,
+                    source_message_id=message["id"], fingerprint=fingerprint, content=quote, category=category, key=key,
+                    expires_at=time.time() + 30 * 86400))
+                await session.flush()
 
 
 @router.get("/memory-candidates")
@@ -287,7 +310,9 @@ async def decide_candidate(identifier: UUID, decision: Literal["accept", "reject
         raise HTTPException(404, "候选不存在")
     conversation = await owned(session, row.conversation_id, user)
     source = next((m for i, m in enumerate(conversation.messages) if message_id(m, i) == row.source_message_id), None)
-    if not source or source["question"].strip() != row.content or row.expires_at <= time.time():
+    valid_source = source and (source["question"].strip() == row.content or
+        (row.category, row.key, row.content) in candidate_parts(source["question"].strip()))
+    if not valid_source or row.expires_at <= time.time():
         raise HTTPException(409, "候选来源已失效或过期")
     changed = await session.execute(update(MemoryCandidate).where(MemoryCandidate.id == row.id,
         MemoryCandidate.version == payload.expected_version, MemoryCandidate.status == "pending")
@@ -302,7 +327,8 @@ async def decide_candidate(identifier: UUID, decision: Literal["accept", "reject
             if existing.content != row.content and (str(payload.replace_id) != existing.id or payload.replace_version != existing.version):
                 raise HTTPException(409, "存在冲突，必须明确确认替换并提供当前版本")
             result = await session.execute(update(MemoryItem).where(MemoryItem.id == existing.id, MemoryItem.version == existing.version)
-                .values(content=row.content, source=source_info, status="active", version=existing.version + 1))
+                .values(content=row.content, source=source_info, status="active", expires_at=None,
+                    version=existing.version + 1))
             if result.rowcount != 1:
                 raise HTTPException(409, "记忆已更新")
             row.memory_item_id = existing.id

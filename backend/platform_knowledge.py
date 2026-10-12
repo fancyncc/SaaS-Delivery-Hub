@@ -7,7 +7,7 @@ import json
 from backend.knowledge import lexemes
 
 VERSION = "platform-assistant-2026-09-13.1"
-IDENTITY = "你是 SaaS Delivery Hub 平台的专属实施助手，熟悉产品功能、页面入口、角色权限、实施流程、资料检索与故障排查。"
+IDENTITY = "你是 SaaS 实施平台 平台的专属实施助手，熟悉产品功能、页面入口、角色权限、实施流程、资料检索与故障排查。"
 
 # Each entry names the implementation that maintainers should review on changes.
 ARTICLES = [
@@ -32,9 +32,9 @@ ARTICLES = [
     ("delivery", "培训、交付物、反馈和验收", "培训 交付物 下载 报告 验收 ready 整改 反馈 总结", "backend/delivery.py,backend/delivery_routes.py",
      "交付工作区展示材料、需求差距、实施计划与甘特图、配置、成员导入、反馈整改和交付文件。完成项目通常有实施计划、管理员指南、成员指南、FAQ、验收报告、实施总结六类版本交付物，可下载 Markdown 或 JSON。上线检查核对实际配置、人数、管理员、角色部门、导入及培训材料。报告检查通过仍需独立验收审批；未结项时可能没有实施总结。整改任务只因实际检查结果满足而关闭，不因提交反馈自动关闭。文件生成不代表真实学员已经培训或客户已现实签章。"),
     ("recovery", "执行状态、取消、重试与恢复", "状态 卡住 阻塞 失败 取消 重试 恢复 preparing_materials blocked", "backend/state_machine.py,backend/main.py,backend/agent_loop.py",
-     "Run 可能为 pending、running、preparing_materials、waiting_approval、blocked、succeeded、failed、cancelled。waiting_approval 等待批准；preparing_materials 等待材料；failed/cancelled 可按权限新建重试 Run，保留 retry_of_run_id。取消会同时取消待审批请求。v2 blocked 可经有 run.retry 权限者填写至少3字原因、带版本号恢复同一 Run，原执行人仍需执行权限。累计模型预算不清零，状态不明的已开始动作不能自动恢复。已完成项目不能简单再次启动同一执行。先检查最新状态和阻塞原因，不要直接改数据库状态。"),
-    ("agent", "长程 Agent、真实模型与执行模式", "智能体 agent Agent llm LLM 模型 真实 离线 v2 规划 预算", "backend/config.py,backend/intelligence.py,backend/agent_loop.py",
-     "默认 legacy 流程使用确定性逻辑，v2 在固定业务阶段内加入里程碑依赖、工具动作、评估、重试、重规划、恢复与项目经验。AGENT_ENGINE=v2 影响新 Run；已有执行使用保存的引擎版本。真实生成模型需 MODEL_MODE=real、MODEL_BASE_URL、MODEL_NAME、MODEL_API_KEY，MODEL_API_STYLE 可选择 responses 或 chat_completions，后者兼容 qwen-plus 的 JSON 输出并在本地校验。LLM_MODE=local 可使用独立配置的自托管生成服务。模型接入存在不等于凭据已配置或质量已验收。聊天与工作流是不同入口，聊天不要求启用 v2。inline 适合本地演示；worker 依赖 Celery/Redis/Beat，逐轮提交。助手没有 shell、浏览器、任意 SQL 或自主业务审批权限。"),
+     "Run 可能为 pending、running、preparing_materials、waiting_approval、blocked、succeeded、failed、cancelled。waiting_approval 等待批准；preparing_materials 等待材料；failed/cancelled 可按权限新建重试 Run，保留 retry_of_run_id。取消会同时取消待审批请求。blocked 可经有 run.retry 权限者填写至少3字原因、带版本号恢复同一 Run，原执行人仍需执行权限。累计模型预算不清零，状态不明的已开始动作不能自动恢复。已完成项目不能简单再次启动同一执行。先检查最新状态和阻塞原因，不要直接改数据库状态。"),
+    ("agent", "长程 Agent、真实模型与执行模式", "智能体 agent Agent llm LLM 模型 真实 离线 规划 预算", "backend/config.py,backend/intelligence.py,backend/agent_loop.py",
+     "所有实施任务使用同一个 Agent，在固定业务阶段内规划里程碑、调用工具、评估、重试、重规划和恢复。确定性模式使用默认计划，真实模型模式可提出经过程序校验的计划与动作。真实生成模型需 MODEL_MODE=real、MODEL_BASE_URL、MODEL_NAME、MODEL_API_KEY，MODEL_API_STYLE 可选择 responses 或 chat_completions，后者兼容 qwen-plus 的 JSON 输出并在本地校验。LLM_MODE=local 可使用独立配置的自托管生成服务。模型接入存在不等于凭据已配置或质量已验收。聊天与工作流是不同入口，聊天与实施 Agent 有各自入口。inline 适合本地演示；worker 依赖 Celery/Redis/Beat，逐轮提交。助手没有 shell、浏览器、任意 SQL 或自主业务审批权限。"),
     ("knowledge", "企业知识版本、检索与索引", "知识 检索 rag RAG 向量 版本 停用 重建 索引 命中", "backend/knowledge.py,backend/knowledge_routes.py",
      "公司管理员选择公司通用或具体项目范围，录入标题、版本、模块、来源、授权和正文；正文20到30000字符。同标题版本必须递增并保持原项目范围。知识按标题和段落分块，中文双字词项、英文标识符检索；RAG_MODE=mock 时使用词项检索；real 企业知识路径使用 PostgreSQL 512维 pgvector、OpenSearch BM25、RRF 与必选重排。Embedding 与 Rerank 支持 local 加载权重或 online 调用接口。当前项目附件的统一异步向量索引仍在实施，不应声称所有资料已完成真实 RAG。资料更新、停用和索引身份变化影响召回；最新版本未就绪也不回退旧版。真实向量索引依赖 Worker/Beat，失败最多自动尝试3次，可管理员重建。公司客户资料不是平台官方功能定义，虚构演示制度不覆盖产品规则。"),
     ("chat", "AI 助手附件、上下文与长期记忆", "对话 聊天 附件 pdf PDF docx DOCX 上下文 记忆 历史 扫描", "backend/chat.py,backend/chat_routes.py",

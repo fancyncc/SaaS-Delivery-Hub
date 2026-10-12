@@ -9,6 +9,7 @@ const agent = computed(() => props.run.state.agent)
 const stages: Record<string,string> = {discovery:'调研与方案', configuration:'配置方案', migration:'配置执行与导入准备', acceptance:'导入、培训与验收', closure:'项目交付'}
 const outcomes: Record<string,string> = {pass:'通过', retry:'重试', replan:'重新规划', blocked:'等待处理'}
 const tools: Record<string,string> = {create_project:'确认项目', collect_requirements:'提取需求', retrieve_product_knowledge:'检索产品知识', gap_analysis:'分析能力差距', generate_implementation_plan:'生成实施计划', inspect_tenant_configuration:'读取当前配置', generate_configuration_changes:'生成配置方案', apply_configuration:'执行已审批配置', validate_import_files:'校验导入材料', execute_import:'执行已审批导入', generate_training_materials:'生成培训材料', run_go_live_checks:'检查上线条件', close_project:'完成交付', knowledge_search:'补充知识检索'}
+Object.assign(tools, {check_project_brief:'检查项目材料', preview_import:'预览导入影响', search_official_docs:'搜索官方资料', read_official_page:'读取官方正文'})
 async function resume() {
   busy.value = true; error.value = ''
   try {
@@ -20,7 +21,7 @@ async function resume() {
 </script>
 
 <template>
-  <section v-if="run.state.engine_version === 'v2' && agent" class="panel agent-progress">
+  <section v-if="agent && (agent.plan || agent.evaluation)" class="panel agent-progress">
     <h2>实施进度 · {{stages[agent.stage] || '准备中'}}</h2>
     <p>第 {{agent.rounds}} 轮 · 方案版本 {{agent.plan_version}} · 重规划 {{agent.replans}} 次</p>
     <p v-if="agent.evaluation"><strong>{{outcomes[agent.evaluation.outcome]}}</strong> · {{agent.evaluation.reason}}</p>

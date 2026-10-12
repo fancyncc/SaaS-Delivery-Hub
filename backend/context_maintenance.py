@@ -6,8 +6,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from fastapi import HTTPException
-from prometheus_client import Counter, Histogram
-from sqlalchemy import case, or_, select, update
+from prometheus_client import Counter, Gauge, Histogram
+from sqlalchemy import case, func, or_, select, update
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -15,6 +15,7 @@ from backend.chat_models import ChatContextSnapshot, ChatContextTask, ChatConver
 from backend.config import get_settings
 from backend.context_budget import count_tokens, input_limit
 from backend.conversation_state import (
+    CONTEXT_PRODUCER,
     EXTRACTIVE_FALLBACK,
     digest,
     source_digest,
@@ -25,9 +26,11 @@ from backend.conversation_state import (
 
 JOBS = Counter("saas_context_jobs_total", "Context maintenance outcomes", ["outcome"])
 LAG = Histogram("saas_context_lag_turns", "Unprocessed conversation turns", buckets=(0, 1, 2, 4, 8, 16, 32, 64, 100, 150, 200))
+QUEUE = Gauge("saas_context_queue_tasks", "Context tasks in active tenants", ["status"])
+OLDEST = Gauge("saas_context_queue_oldest_seconds", "Oldest waiting context task")
 
 
-async def enqueue(session, row, target_version):
+async def enqueue(session, row, target_version, *, force=False):
     if get_settings().chat_context_mode == "off":
         return
     # Atomic upsert also covers two SQLite requests lazily discovering the same
@@ -37,14 +40,17 @@ async def enqueue(session, row, target_version):
     else:
         from sqlalchemy.dialects.sqlite import insert
     running = ChatContextTask.status == "running"
+    preserve = running | ((ChatContextTask.target_version == target_version) &
+        ChatContextTask.status.in_(["pending", "failed"])) if not force else running
     statement = insert(ChatContextTask).values(conversation_id=row.id, tenant_id=row.tenant_id,
-        user_id=row.user_id, target_version=target_version)
+        user_id=row.user_id, target_version=target_version, queued_at=time.time())
     statement = statement.on_conflict_do_update(index_elements=["conversation_id"], set_={
         "target_version": target_version,
-        "status": case((running, ChatContextTask.status), else_="pending"),
-        "next_attempt": case((running, ChatContextTask.next_attempt), else_=0),
-        "attempts": case((running, ChatContextTask.attempts), else_=0),
-        "error_code": case((running, ChatContextTask.error_code), else_=""),
+        "status": case((preserve, ChatContextTask.status), else_="pending"),
+        "next_attempt": case((preserve, ChatContextTask.next_attempt), else_=0),
+        "attempts": case((preserve, ChatContextTask.attempts), else_=0),
+        "error_code": case((preserve, ChatContextTask.error_code), else_=""),
+        "queued_at": case((preserve & (ChatContextTask.queued_at > 0), ChatContextTask.queued_at), else_=time.time()),
     }, where=ChatContextTask.target_version <= target_version)
     await session.execute(statement)
 
@@ -59,18 +65,18 @@ async def bootstrap_context(session, row, expected_version):
     if locked is None or locked.version != expected_version:
         raise HTTPException(409, "对话已更新，请刷新后重试")
     from backend.chat_history import hydrate
-    await hydrate(session, row)
+    await hydrate(session, row, runtime=getattr(row, "_history_light", False))
     task = await session.get(ChatContextTask, row.id)
     snapshot = await session.get(ChatContextSnapshot, row.id)
     if task is None or not valid_snapshot(snapshot, row) or snapshot.processed_turn < len(row.messages):
         await enqueue(session, row, row.version)
     await session.commit()
-    await hydrate(session, row)
+    await hydrate(session, row, runtime=getattr(row, "_history_light", False))
 
 
 def valid_snapshot(snapshot, row):
     return bool(snapshot and snapshot.user_id == row.user_id and snapshot.tenant_id == row.tenant_id
-        and snapshot.producer_version == "context-v1"
+        and snapshot.producer_version == CONTEXT_PRODUCER
         and snapshot.processed_turn <= len(row.messages)
         and snapshot.source_digest == source_digest(row.messages[:snapshot.processed_turn])
         and snapshot.documents_digest == digest(row.documents))
@@ -84,7 +90,7 @@ async def maintain_one(session, identifier):
         ChatContextTask.next_attempt <= now,
         or_(ChatContextTask.status == "pending", (ChatContextTask.status == "running") & (ChatContextTask.lease_until < now)),
     ).values(status="running", lease_token=lease, lease_until=now + lease_seconds,
-        attempts=ChatContextTask.attempts + 1))
+        consumer_seen_at=now, attempts=ChatContextTask.attempts + 1))
     await session.commit()
     if claimed.rowcount != 1:
         return False
@@ -95,7 +101,7 @@ async def maintain_one(session, identifier):
         if task is None:
             return False
         user = await actor_context(session, SimpleNamespace(actor_id=task.user_id, tenant_id=task.tenant_id))
-        row = await owned(session, identifier, user)
+        row = await owned(session, identifier, user, runtime_history=True)
         snapshot = await session.get(ChatContextSnapshot, identifier, populate_existing=True)
         valid = valid_snapshot(snapshot, row)
         start = snapshot.processed_turn if valid else 0
@@ -122,7 +128,7 @@ async def maintain_one(session, identifier):
         if row is None:
             await session.rollback()
             return False
-        row = await owned(session, identifier, user)
+        row = await owned(session, identifier, user, runtime_history=True)
         task = await session.scalar(select(ChatContextTask).where(ChatContextTask.conversation_id == identifier).with_for_update())
         if task is None or task.lease_token != lease or task.lease_until < time.time():
             await session.rollback()
@@ -139,8 +145,8 @@ async def maintain_one(session, identifier):
             task.status, task.lease_until = "pending", 0
             await session.commit()
             return False
-        from backend.chat_history import hydrate, index_history
-        await hydrate(session, row)
+        from backend.chat_history import hydrate
+        await hydrate(session, row, runtime=True)
         snapshot = await session.get(ChatContextSnapshot, identifier)
         if snapshot is not None and valid_snapshot(snapshot, row) and snapshot.processed_turn > target:
             task.status, task.lease_until = "pending", 0
@@ -156,17 +162,11 @@ async def maintain_one(session, identifier):
         snapshot.state, snapshot.summary = state, summary
         snapshot.generation += 1
         snapshot.mode = "model" if get_settings().model_mode == "real" and not EXTRACTIVE_FALLBACK.get() else "extractive"
-        snapshot.producer_version = "context-v1"
-        task.status = "pending" if target < len(row.messages) or task.target_version != version else "done"
+        snapshot.producer_version = CONTEXT_PRODUCER
+        task.status = "pending" if target < len(row.messages) or task.target_version > version else "done"
         task.attempts, task.next_attempt, task.lease_until, task.error_code = 0, 0, 0, ""
         await session.commit()
         JOBS.labels("succeeded").inc()
-        # Vector inference runs after releasing conversation/task locks.
-        try:
-            await index_history(session, row)
-            await session.commit()
-        except Exception:
-            await session.rollback()
         return True
     except Exception as exc:
         await session.rollback()
@@ -185,26 +185,74 @@ async def maintain_one(session, identifier):
 
 
 async def maintain_pending():
-    if get_settings().chat_context_mode == "off":
+    s = get_settings()
+    if s.chat_context_mode == "off" and not s.chat_history_enabled:
         return
     from sqlalchemy import text
 
+    from backend.chat_history import embedding_identity, maintain_history_indexes
+    from backend.chat_models import ChatHistoryMigration
     from backend.models import Tenant
-    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    engine = create_async_engine(s.database_url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
             tenants = list(await session.scalars(select(Tenant.id).where(Tenant.status == "active")))
+        context_jobs, history_jobs, counts, oldest = [], [], {}, None
+        now = time.time()
         for tenant in tenants:
             async with factory() as session:
                 session.info["rls_context"] = {"app.current_tenant_id": tenant}
                 if session.bind.dialect.name == "postgresql":
                     await session.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": tenant})
-                identifiers = list(await session.scalars(select(ChatContextTask.conversation_id).where(
+                await session.execute(update(ChatContextTask).where(ChatContextTask.tenant_id == tenant)
+                    .values(consumer_seen_at=now))
+                for status, count in await session.execute(select(ChatContextTask.status, func.count()).where(
+                        ChatContextTask.tenant_id == tenant).group_by(ChatContextTask.status)):
+                    counts[status] = counts.get(status, 0) + count
+                queued = await session.scalar(select(func.min(ChatContextTask.queued_at)).where(
                     ChatContextTask.tenant_id == tenant, ChatContextTask.status.in_(["pending", "running"]),
-                    ChatContextTask.next_attempt <= time.time()).order_by(ChatContextTask.next_attempt).limit(20)))
-                for identifier in identifiers:
-                    await maintain_one(session, identifier)
+                    ChatContextTask.queued_at > 0))
+                if queued is not None:
+                    oldest = min(oldest, queued) if oldest is not None else queued
+                if s.chat_context_mode != "off":
+                    old_snapshots = select(ChatContextSnapshot.conversation_id).where(
+                        ChatContextSnapshot.tenant_id == tenant, ChatContextSnapshot.producer_version != CONTEXT_PRODUCER)
+                    await session.execute(update(ChatContextTask).where(ChatContextTask.conversation_id.in_(old_snapshots),
+                        ChatContextTask.status == "done").values(status="pending", queued_at=now,
+                        attempts=0, next_attempt=0, error_code=""))
+                    tasks = await session.execute(select(ChatContextTask.conversation_id, ChatContextTask.queued_at).where(
+                        ChatContextTask.tenant_id == tenant, ChatContextTask.next_attempt <= now,
+                        or_(ChatContextTask.status == "pending",
+                            (ChatContextTask.status == "running") & (ChatContextTask.lease_until < now)))
+                        .order_by(ChatContextTask.queued_at, ChatContextTask.conversation_id).limit(4))
+                    context_jobs.extend((queued, tenant, identifier) for identifier, queued in tasks)
+                if s.chat_history_enabled and s.rag_mode == "real":
+                    due = await session.scalar(select(ChatHistoryMigration.conversation_id).where(
+                        ChatHistoryMigration.tenant_id == tenant, ChatHistoryMigration.index_lease_until <= now,
+                        or_(ChatHistoryMigration.index_identity != embedding_identity(),
+                            (ChatHistoryMigration.index_status != "done") & (ChatHistoryMigration.index_next_attempt <= now))).limit(1))
+                    if due:
+                        history_jobs.append(tenant)
+                await session.commit()
+        for status in ("pending", "running", "failed", "done"):
+            QUEUE.labels(status).set(counts.get(status, 0))
+        OLDEST.set(max(0, now - oldest) if oldest is not None else 0)
+        semaphore = asyncio.Semaphore(2)
+        async def consume(tenant, identifier=None):
+            async with semaphore:
+                async with factory() as session:
+                    session.info["rls_context"] = {"app.current_tenant_id": tenant}
+                    if session.bind.dialect.name == "postgresql":
+                        await session.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": tenant})
+                    if identifier:
+                        await maintain_one(session, identifier)
+                    else:
+                        await maintain_history_indexes(session, tenant, limit=1)
+        # Small global batches fit a worker time limit; each lease owns one session.
+        jobs = [consume(tenant, identifier) for _, tenant, identifier in sorted(context_jobs)[:4]]
+        jobs.extend(consume(tenant) for tenant in history_jobs[:4])
+        await asyncio.gather(*jobs)
     finally:
         await engine.dispose()
 

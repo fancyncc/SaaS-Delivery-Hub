@@ -261,6 +261,11 @@ async def test_project_delete_removes_run_and_is_idempotent(client):
 
 async def test_completed_project_cannot_start_again(client):
     created = await project(client)
+    actor_id = (await client.get("/api/auth/me")).json()["data"]["id"]
+    assigned = await client.post(f"/api/projects/{created['id']}/members",
+        headers={"Idempotency-Key": str(uuid.uuid4())},
+        json={"user_id": actor_id, "primary_role_code": "implementation_consultant"})
+    assert assigned.status_code == 200
     started = await client.post(
         f"/api/projects/{created['id']}/runs",
         headers={"Idempotency-Key": str(uuid.uuid4())},

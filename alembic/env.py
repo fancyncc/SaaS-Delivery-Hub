@@ -11,7 +11,8 @@ from alembic import context
 from backend import (
     agent_models,  # noqa: F401
     chat_models,  # noqa: F401
-    rag_v3_models,  # noqa: F401
+    knowledge_index_models,  # noqa: F401
+    run_snapshots,  # noqa: F401
 )
 from backend.config import get_settings
 from backend.models import Base

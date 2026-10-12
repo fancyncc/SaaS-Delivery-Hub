@@ -74,7 +74,7 @@ async def inspect_rag(
     user: Principal = Depends(current_principal),
     session: AsyncSession = Depends(get_session),
 ):
-    from backend.rag_v3 import inspect, needs_retrieval
+    from backend.knowledge_retrieval import inspect, needs_retrieval
 
     question = payload.question.strip()
     if not question:
@@ -95,7 +95,7 @@ async def inspect_rag(
         result = (
             await inspect(session, user.tenant_id, question, project_ids, payload.evidence_budget)
             if needed
-            else {"pipeline": "v3", "status": "not_needed", "chunks": [], "evidence_text": ""}
+            else {"pipeline": "retrieval", "status": "not_needed", "chunks": [], "evidence_text": ""}
         )
     except HTTPException:
         raise
@@ -140,10 +140,10 @@ async def upload_file(
     user: Principal = Depends(current_principal),
     session: AsyncSession = Depends(get_session),
 ):
+    from backend.document_formats import validate_binary
+    from backend.document_parser import max_bytes, validate_filename
+    from backend.knowledge_index import register
     from backend.models import Tenant
-    from backend.rag_v3_binary import validate_binary
-    from backend.rag_v3_index import register
-    from backend.rag_v3_parse import max_bytes, validate_filename
 
     name = (file.filename or "").replace("\\", "/").split("/")[-1][:200]
     suffix = validate_filename(name)
@@ -178,7 +178,7 @@ async def upload_file(
         source=name,
         license=license,
         body="",
-        index_status="v3_pending",
+        index_status="indexed_pending",
     )
     session.add(item)
     await session.flush()
@@ -209,7 +209,7 @@ async def upload_file(
             "document_id": item.id,
             "parse_status": source.phase,
             "index_status": source.phase,
-            "indexing_enabled": get_settings().rag_v3_indexing_enabled,
+            "indexing_enabled": get_settings().retrieval_indexing_enabled,
             "warnings": [],
             "message": "等待异步解析和索引；图片、公式或 OCR 内容以文档详情中的解析告警为准",
         }
@@ -220,7 +220,7 @@ async def upload_file(
 async def list_documents(
     user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)
 ):
-    from backend.rag_v3_models import V3Document
+    from backend.knowledge_index_models import IndexedDocument
 
     rows = (
         await session.scalars(
@@ -231,18 +231,14 @@ async def list_documents(
     ).all()
     indexed = {
         source.origin_id: source for source in await session.scalars(
-            select(V3Document).where(V3Document.origin_id.in_([d.id for d in rows]))
+            select(IndexedDocument).where(IndexedDocument.origin_id.in_([d.id for d in rows]))
         )
     } if rows else {}
-    submitters = dict(
-        (
-            await session.execute(
-                select(User.id, User.display_name).where(
-                    User.id.in_({d.submitted_by for d in rows if d.submitted_by})
-                )
-            )
-        ).all()
-    )
+    submitters = {user_id: name for user_id, name in (await session.execute(
+        select(User.id, User.display_name).where(
+            User.id.in_({d.submitted_by for d in rows if d.submitted_by})
+        )
+    )).all()}
     return {
         "data": [
             {
@@ -254,10 +250,10 @@ async def list_documents(
                 "source": d.source,
                 "license": d.license,
                 "active": d.active,
-                "index_status": (f"v3_{indexed[d.id].phase}" if d.id in indexed
-                                 else "v3_missing_original" if d.source.lower().endswith((".pdf", ".pptx", ".xlsx"))
-                                 else "v3_unsupported" if d.source.lower().endswith((".doc", ".ppt", ".xls"))
-                                 else "v3_pending"),
+                "index_status": (f"indexed_{indexed[d.id].phase}" if d.id in indexed
+                                 else "indexed_missing_original" if d.source.lower().endswith((".pdf", ".pptx", ".xlsx"))
+                                 else "indexed_unsupported" if d.source.lower().endswith((".doc", ".ppt", ".xls"))
+                                 else "indexed_pending"),
                 "index_error": (indexed[d.id].error if d.id in indexed
                                 else "原始文件未保存，请重新上传" if d.source.lower().endswith((".pdf", ".pptx", ".xlsx"))
                                 else "当前文件格式不支持索引" if d.source.lower().endswith((".doc", ".ppt", ".xls"))
@@ -316,7 +312,7 @@ async def upload_document(
                 submitted_by=user.user_id,
             )
         )
-    from backend.rag_v3_index import register
+    from backend.knowledge_index import register
 
     await register(session, item)
     if get_settings().execution_mode == "inline" and get_settings().rag_mode == "mock":
@@ -351,15 +347,15 @@ async def read_document(
     )
     if item is None:
         raise HTTPException(404, "文档不存在或无权访问")
-    from backend.rag_v3_models import V3Document
+    from backend.knowledge_index_models import IndexedDocument
 
-    v3 = await session.scalar(
-        select(V3Document).where(
-            V3Document.origin_id == item.id, V3Document.tenant_id == user.tenant_id
+    indexed = await session.scalar(
+        select(IndexedDocument).where(
+            IndexedDocument.origin_id == item.id, IndexedDocument.tenant_id == user.tenant_id
         )
     )
     can_reindex = False
-    if v3 and v3.phase == "failed" and item.active and user.session_context == "customer":
+    if indexed and indexed.phase == "failed" and item.active and user.session_context == "customer":
         if item.project_id:
             project = await accessible_project_or_404(session, item.project_id, user)
             access = await project_access(session, project, user)
@@ -378,34 +374,34 @@ async def read_document(
             "license": item.license,
             "active": item.active,
             "can_reindex": can_reindex,
-            "index_status": (f"v3_{v3.phase}" if v3 else
-                             "v3_missing_original" if item.source.lower().endswith((".pdf", ".pptx", ".xlsx")) else
-                             "v3_unsupported" if item.source.lower().endswith((".doc", ".ppt", ".xls")) else
+            "index_status": (f"indexed_{indexed.phase}" if indexed else
+                             "indexed_missing_original" if item.source.lower().endswith((".pdf", ".pptx", ".xlsx")) else
+                             "indexed_unsupported" if item.source.lower().endswith((".doc", ".ppt", ".xls")) else
                              item.index_status),
-            "index_error": (v3.error if v3 else
+            "index_error": (indexed.error if indexed else
                             "原始文件未保存，请重新上传" if item.source.lower().endswith((".pdf", ".pptx", ".xlsx")) else
                             item.index_error),
-            "v3": {
-                "phase": v3.phase,
-                "error": v3.error,
-                "warnings": v3.warnings,
-                "filename": v3.filename,
-                "metrics": v3.metrics,
+            "index": {
+                "phase": indexed.phase,
+                "error": indexed.error,
+                "warnings": indexed.warnings,
+                "filename": indexed.filename,
+                "metrics": indexed.metrics,
             }
-            if v3
+            if indexed
             else None,
         }
     }
 
 
-@router.post("/{document_id}/v3-index")
-async def v3_index(
+@router.post("/{document_id}/reindex")
+async def reindex(
     document_id: UUID,
     request: Request,
     user: Principal = Depends(current_principal),
     session: AsyncSession = Depends(get_session),
 ):
-    from backend.rag_v3_index import register
+    from backend.knowledge_index import register
 
     item = await session.scalar(
         select(KnowledgeDocument)
@@ -428,20 +424,23 @@ async def v3_index(
     if item.source.lower().endswith((".doc", ".ppt", ".xls")):
         raise HTTPException(415, "当前文件格式不支持索引，请转换后重新上传")
     if item.source.lower().endswith((".pdf", ".pptx", ".xlsx")):
-        from backend.rag_v3_models import V3Document
+        from backend.knowledge_index_models import IndexedDocument
 
-        existing = await session.scalar(select(V3Document).where(V3Document.origin_id == item.id))
+        existing = await session.scalar(select(IndexedDocument).where(IndexedDocument.origin_id == item.id))
         if not existing:
             raise HTTPException(409, "原始文件未保存，请重新上传")
     source = await register(session, item)
     source.phase = "pending"
     source.attempts = 0
     source.error = ""
-    if item.index_status.startswith("v3_"):
-        item.index_status = "v3_pending"
+    if item.index_status.startswith(("indexed_", "v3_")):
+        item.index_status = "indexed_pending"
         item.index_error = ""
     session.add(audit_event(request, user, "knowledge.reindex_requested", item.id,
                             {"project_id": item.project_id}))
+    # Refresh the deterministic cache only in offline mode; it is not a second public pipeline.
+    if get_settings().execution_mode == "inline" and get_settings().rag_mode == "mock" and item.body:
+        await index_document(session, item)
     await session.commit()
     return {"data": {"id": item.id, "index_status": source.phase}}
 
@@ -468,35 +467,3 @@ async def deactivate(
     session.add(audit_event(request, user, "knowledge.deactivated", item.id, {}))
     await session.commit()
     return {"data": {"id": item.id, "active": False}}
-
-
-@router.post("/{document_id}/reindex")
-async def reindex(
-    document_id: UUID,
-    request: Request,
-    user: Principal = Depends(require_company_admin),
-    session: AsyncSession = Depends(get_session),
-):
-    item = await session.scalar(
-        select(KnowledgeDocument)
-        .where(
-            KnowledgeDocument.id == str(document_id), KnowledgeDocument.tenant_id == user.tenant_id
-        )
-        .with_for_update()
-    )
-    if not item or not item.active:
-        raise HTTPException(404, "资料不存在或已停用")
-    if item.index_status.startswith("v3_"):
-        raise HTTPException(409, "此文件属于 V3，请使用 V3 索引重建入口")
-    item.index_status, item.index_attempts, item.index_error = "pending", 0, ""
-    if get_settings().rag_mode == "real":
-        from backend.retrieval_sources import sync_knowledge
-
-        source = await sync_knowledge(session, item)
-        source.phase, source.attempts, source.error_code = "pending", 0, ""
-        source.generation += 1
-    if get_settings().execution_mode == "inline" and get_settings().rag_mode == "mock":
-        await index_document(session, item)
-    session.add(audit_event(request, user, "knowledge.reindexed", item.id, {}))
-    await session.commit()
-    return {"data": {"id": item.id, "index_status": item.index_status}}

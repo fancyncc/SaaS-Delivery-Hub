@@ -1,4 +1,4 @@
-"""Exercise a new V3 upload in local Docker, then remove only this probe document."""
+"""Exercise a new 知识检索 upload in local Docker, then remove only this probe document."""
 
 import json
 import subprocess
@@ -23,7 +23,7 @@ def cleanup(document_id, title):
     assert title.startswith(("索引验收临时资料-", "空白页验收临时资料-"))
     sql = f"""BEGIN;
 DELETE FROM retrieval_sources WHERE kind='knowledge' AND origin_id='{identifier}';
-DELETE FROM rag_v3_documents WHERE origin_id='{identifier}';
+DELETE FROM retrieval_documents WHERE origin_id='{identifier}';
 DELETE FROM knowledge_chunks WHERE document_id='{identifier}';
 DELETE FROM knowledge_documents WHERE id='{identifier}' AND title='{title}';
 COMMIT;"""
@@ -56,18 +56,18 @@ def main():
                 "license": "本机索引验收", "body": "# 索引验收\n\n本资料仅用于本机 Docker 索引生命周期验收。索引成功后将自动清理。",
             })
             document_id = uploaded["id"]
-            assert uploaded["index_status"] in {"pending", "v3_pending"}, uploaded
+            assert uploaded["index_status"] in {"pending", "indexed_pending"}, uploaded
             phases = []
             for _ in range(60):
                 response = client.get(f"/api/knowledge/{document_id}")
                 response.raise_for_status()
                 detail = response.json()["data"]
-                phase = detail["v3"]["phase"]
+                phase = detail["index"]["phase"]
                 phases.append(phase)
                 if phase in {"ready", "failed"}:
                     break
                 time.sleep(3)
-            assert phases[-1] == "ready", detail["v3"]
+            assert phases[-1] == "ready", detail["index"]
             print(json.dumps({"upload": "passed", "initial_status": uploaded["index_status"],
                               "final_phase": phases[-1], "observed_phases": sorted(set(phases))},
                              ensure_ascii=False))

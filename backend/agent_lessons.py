@@ -6,7 +6,8 @@ from backend.agent_types import MemoryEntry
 from backend.config import get_settings
 from backend.models import Approval, ImportJob
 
-WORKFLOW_VERSION = "agent-v2-context-1"
+WORKFLOW_VERSION = "implementation-context-1"
+COMPATIBLE_WORKFLOWS = (WORKFLOW_VERSION, "agent-v2-context-1")
 TEMPLATES = {
     "workflow": "同一阶段按固定里程碑依赖顺序执行，并逐项核对工具完成凭证。",
     "constraint_pattern": "高风险操作必须取得本次对应审批；历史批准不能替代当前审批。",
@@ -52,7 +53,7 @@ async def record(session, run, action):
     for category, advice in TEMPLATES.items():
         row = await session.scalar(select(AgentLesson).where(AgentLesson.project_id == run.project_id,
             AgentLesson.tenant_id == run.tenant_id, AgentLesson.tool == action.tool,
-            AgentLesson.category == category, AgentLesson.workflow_version == WORKFLOW_VERSION))
+            AgentLesson.category == category, AgentLesson.workflow_version.in_(COMPATIBLE_WORKFLOWS)))
         if row and row.verified:
             continue
         validator = VALIDATORS.get(category)
@@ -70,7 +71,7 @@ async def recall(session, run, tool):
         return []
     rows = list(await session.scalars(select(AgentLesson).where(AgentLesson.tenant_id == run.tenant_id,
         AgentLesson.project_id == run.project_id, AgentLesson.tool == tool, AgentLesson.verified.is_(True),
-        AgentLesson.workflow_version == WORKFLOW_VERSION).order_by(AgentLesson.id).limit(3)))
+        AgentLesson.workflow_version.in_(COMPATIBLE_WORKFLOWS)).order_by(AgentLesson.id).limit(3)))
     # Stored arbitrary prose never enters context, even if DB data were malformed.
     return [MemoryEntry(id=r.id, advice=TEMPLATES[r.category], source_run_id=r.run_id,
         source_action_id=r.evidence["action_ids"][0], verified=True) for r in rows

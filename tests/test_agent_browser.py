@@ -16,7 +16,6 @@ async def test_agent_progress_and_resume_in_browser(client, monkeypatch):
 
     from backend.config import get_settings
 
-    monkeypatch.setattr(get_settings(), "agent_engine", "v2")
     monkeypatch.setattr(get_settings(), "agent_max_rounds", 1)
     p = await project(client)
     started = (await client.post(f"/api/projects/{p['id']}/runs", headers={"Idempotency-Key": str(uuid.uuid4())})).json()["data"]

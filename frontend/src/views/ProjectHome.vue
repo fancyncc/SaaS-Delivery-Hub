@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { api, writeHeaders } from '../api'
 import { useAuthStore } from '../auth'
 import type { Project, ProjectDocument } from '../types'
+import ProjectBriefCheck from '../components/ProjectBriefCheck.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -148,6 +149,7 @@ onMounted(async () => {
           <label><span>验收标准 <em>选填</em></span><textarea v-model.trim="form.acceptance_criteria" placeholder="如：80 名成员全部导入、权限抽查通过、关键模板可正常使用"></textarea></label>
           <label class="wide"><span>约束、风险与备注 <em>选填</em></span><textarea v-model.trim="form.notes" placeholder="记录审批依赖、时间约束、特殊风险或待确认问题"></textarea></label>
         </div></div>
+        <ProjectBriefCheck :draft="{...form, customer_name:companies.find(c=>c.id===companyId)?.name || '', departments:departmentsText.split(/[、，,]/).map(s=>s.trim()).filter(Boolean)}" />
         <div class="form-actions"><p>提交后项目先进入“待启动”，实施流程不会自动启动。</p><button class="primary" type="submit" :disabled="loading">{{loading ? '创建中…' : '创建实施项目'}}</button></div>
       </form>
     </section>

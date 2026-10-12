@@ -39,13 +39,13 @@ async function deactivate(id:string) {
   catch(e:any) { error.value=e.message }
 }
 onMounted(load)
-const indexLabels: Record<string,string> = {v3_pending:'等待解析', v3_parsing:'解析中', v3_indexing:'索引中', v3_ready:'可检索', v3_failed:'解析或索引失败', v3_unsupported:'格式不支持', v3_missing_original:'需重新上传原文件'}
+const indexLabels: Record<string,string> = {indexed_pending:'等待解析', indexed_parsing:'解析中', indexed_indexing:'索引中', indexed_ready:'可检索', indexed_failed:'解析或索引失败', indexed_unsupported:'格式不支持', indexed_missing_original:'需重新上传原文件'}
 const taskNames: Record<string,string> = {
   create_project:'创建项目', collect_requirements:'提取客户需求', detect_missing_information:'检查历史资料', retrieve_product_knowledge:'检索产品知识', gap_analysis:'生成能力差距', generate_implementation_plan:'生成实施计划', plan_approval:'审批实施计划', inspect_tenant_configuration:'检查租户配置', generate_configuration_changes:'生成配置差异', configuration_approval:'审批配置变更', apply_configuration:'应用租户配置', validate_import_files:'上传并校验成员 CSV', import_approval:'审批数据导入', execute_import:'执行数据导入', generate_training_materials:'生成培训材料', run_go_live_checks:'运行上线检查', acceptance_approval:'审批上线验收', close_project:'关闭实施项目',
 }
 const statusNames: Record<string,string> = {blocked:'等待处理', preparing_materials:'等待材料', waiting_approval:'等待审批', failed:'执行失败', cancelled:'已取消'}
 async function reindex(id:string) {
-  try { await api(`/api/knowledge/${id}/v3-index`, {method:'POST', headers:writeHeaders()}); notice.value='已加入索引队列。'; await load() }
+  try { await api(`/api/knowledge/${id}/reindex`, {method:'POST', headers:writeHeaders()}); notice.value='已加入索引队列。'; await load() }
   catch(e:any) { error.value=e.message }
 }
 </script>
@@ -62,7 +62,7 @@ async function reindex(id:string) {
     </form>
     <form v-if="auth.isCompanyAdmin" class="panel form-grid" @submit.prevent="uploadFile"><h3>上传知识文件</h3><p>使用上方填写的标题、版本、模块、授权说明及范围。PDF 最多 10 MiB，PPTX/XLSX 最多 5 MiB，其余格式最多 2 MiB；OCR 与未解析内容的告警见文档详情。</p><input type="file" accept=".pdf,.pptx,.xlsx,.docx,.md,.txt,.csv,.json" required @change="chooseFile"><label><input v-model="csvHeader" type="checkbox">CSV 第一条记录是表头</label><button class="primary" :disabled="uploading || !file || form.title.length<2 || form.license.length<3">{{uploading ? '上传中…' : '上传文件并排队索引'}}</button><p role="status">{{notice}}</p></form>
     <button class="secondary" @click="load">刷新索引状态</button>
-    <table><thead><tr><th>标题</th><th>版本</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="d in documents" :key="d.id"><td><router-link :to="`/app/knowledge/${d.id}`">{{d.title}}</router-link><small> · {{d.project_id ? projects.find(p => p.id === d.project_id)?.name || '项目资料' : '公司通用'}}</small></td><td>{{d.version}}</td><td>{{d.source}}</td><td>{{d.active ? (indexLabels[d.index_status] || '等待索引') : '停用'}}<small v-if="d.index_error"> {{d.index_error}}</small></td><td><button v-if="auth.isCompanyAdmin && d.active" class="secondary" @click="deactivate(d.id)">停用</button><button v-if="auth.isCompanyAdmin && d.active && !['v3_unsupported','v3_missing_original'].includes(d.index_status)" class="secondary" @click="reindex(d.id)">重建索引</button></td></tr></tbody></table>
+    <table><thead><tr><th>标题</th><th>版本</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody><tr v-for="d in documents" :key="d.id"><td><router-link :to="`/app/knowledge/${d.id}`">{{d.title}}</router-link><small> · {{d.project_id ? projects.find(p => p.id === d.project_id)?.name || '项目资料' : '公司通用'}}</small></td><td>{{d.version}}</td><td>{{d.source}}</td><td>{{d.active ? (indexLabels[d.index_status] || '等待索引') : '停用'}}<small v-if="d.index_error"> {{d.index_error}}</small></td><td><button v-if="auth.isCompanyAdmin && d.active" class="secondary" @click="deactivate(d.id)">停用</button><button v-if="auth.isCompanyAdmin && d.active && !['indexed_unsupported','indexed_missing_original'].includes(d.index_status)" class="secondary" @click="reindex(d.id)">重建索引</button></td></tr></tbody></table>
   </section>
 </main></template>
 

@@ -53,6 +53,43 @@ const memory = ref({ content: '', version: 0 })
 const useMemory = ref(true)
 const memoryOpen = ref(false)
 const messagesElement = ref<HTMLElement | null>(null)
+type ContextHealth = { health: string; pending_turns: number; waiting_seconds: number; history_index?: { status: string } | null }
+const contextHealth = ref<ContextHealth | null>(null)
+let contextTimer: ReturnType<typeof setTimeout> | undefined
+const contextNotice = computed(() => {
+  const current = contextHealth.value
+  if (!current || current.health === 'disabled') return ''
+  if (current.health === 'failed') return '对话整理失败，可以重新尝试。'
+  if (current.health === 'unavailable') return '对话整理服务暂不可用，较长的对话可能需要等待服务恢复。'
+  if (current.pending_turns && current.waiting_seconds > 3) return current.health === 'processing' ? '正在整理对话上下文。' : '对话上下文正在等待整理。'
+  if (current.history_index?.status === 'retrying') return '历史检索正在恢复，目前仍可使用关键词检索。'
+  return ''
+})
+async function refreshContext() {
+  clearTimeout(contextTimer)
+  const id = active.value?.id
+  if (!id || active.value?.archived) { contextHealth.value = null; return }
+  try {
+    const result = await api<ContextHealth>(`/api/chat/conversations/${id}/context`)
+    if (active.value?.id !== id) return
+    contextHealth.value = result
+    if (['waiting', 'processing', 'unavailable'].includes(result.health) && result.pending_turns || result.history_index?.status === 'retrying') {
+      contextTimer = setTimeout(() => { void refreshContext() }, 5000)
+    }
+  } catch { if (active.value?.id === id) contextHealth.value = null }
+}
+watch(() => [active.value?.id, active.value?.version, active.value?.archived], () => { contextHealth.value = null; void refreshContext() })
+onBeforeUnmount(() => { clearTimeout(contextTimer) })
+async function retryContext() {
+  await perform(async () => {
+    if (!active.value) return
+    contextHealth.value = await api<ContextHealth>(`/api/chat/conversations/${active.value.id}/context/retry`, {
+      method: 'POST', headers: writeHeaders(), body: JSON.stringify({ expected_version: active.value.version }),
+    })
+    await refreshContext()
+    status.value = '已重新提交对话整理任务。'
+  })
+}
 let pendingRequest: { question: string; id: string } | null = null
 
 async function refreshList() {
@@ -253,6 +290,7 @@ function openConversationWindow() {
     <section class="chat-main">
       <header class="chat-toolbar"><button class="mobile-toggle" aria-label="打开历史对话" @click="sidebarOpen = true">☰</button><h1>{{ active?.title || '新对话' }}</h1><select v-model="projectId" aria-label="检索范围" :disabled="busy || !!active"><option value="">当前空间</option><option v-for="p in projects" :key="p.id" :value="p.id">{{ p.name }}</option></select><button v-if="active" class="toolbar-menu" :disabled="busy" aria-label="管理当前对话" @click="manage(active)">⋯</button></header>
       <p v-if="error" class="notice danger" role="alert">{{ error }}</p><p v-if="status && !memoryOpen" class="notice" role="status">{{ status }}</p>
+      <p v-if="contextNotice" class="notice" role="status">{{ contextNotice }} <button v-if="contextHealth?.health === 'failed' || contextHealth?.health === 'unavailable' || contextHealth?.history_index?.status === 'retrying'" :disabled="busy" @click="retryContext">重新整理</button></p>
       <div v-if="active?.archived" class="notice">此对话已归档。<button :disabled="busy" @click="manage(active); updateConversation({ archived: false })">恢复对话</button></div>
       <div ref="messagesElement" class="chat-messages" aria-live="polite">
         <div v-if="!active?.messages.length && !streamingQuestion" class="chat-empty"><span class="empty-mark">✳</span><h2>有什么可以帮你？</h2><p>提问、了解项目进展，或从资料中寻找答案。</p><div class="suggestions"><button :disabled="busy" @click="question = '我的项目当前进行到哪一步？'">查看项目进展 ↗</button><button :disabled="busy" @click="question = '总结我上传的文档，列出关键要求'">总结文档要点 ↗</button></div></div>

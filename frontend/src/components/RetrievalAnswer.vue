@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from 'vue'
-const props = defineProps<{ answer: string; citations: { id: string; title: string; source: string; text: string; number?: number; document_id?: string; location?: {page?: number; slide?: number; sheet?: string; row?: number} }[] }>()
+const props = defineProps<{ answer: string; citations: { id: string; title: string; source: string; text: string; number?: number; document_id?: string; kind?: string; url?: string; retrieved_at?: string; version?: string; location?: {page?: number; slide?: number; sheet?: string; row?: number} }[] }>()
 const selected = ref<number | null>(null)
 const root = ref<HTMLElement | null>(null)
 const copied = ref('')
@@ -22,6 +22,11 @@ async function reveal(number: number) {
 async function copy() {
   try { await navigator.clipboard.writeText(props.answer); copied.value = '已复制' }
   catch { copied.value = '复制失败，请选择文字复制' }
+}
+function officialUrl(source: {kind?:string;url?:string}) {
+  if(source.kind!=='official_web' || !source.url) return undefined
+  try { const url = new URL(source.url); return url.protocol==='https:' && !url.username && !url.password ? url.href : undefined }
+  catch { return undefined }
 }
 </script>
 
@@ -48,7 +53,7 @@ async function copy() {
       <header><h3>检索来源 <span>{{ sources.length }}</span></h3><small>点击卡片展开片段</small></header>
       <details v-for="source in sources" :key="`${source.id}-${source.number}`" class="source-card" :class="{ selected: selected === source.number }" :data-source-number="source.number" :open="selected === source.number" tabindex="-1">
         <summary><span class="source-number">{{ source.number }}</span><span class="source-title"><strong>{{ source.title }}</strong><small>{{ source.source }}<template v-if="source.location?.page"> · 第 {{source.location.page}} 页</template><template v-else-if="source.location?.slide"> · 第 {{source.location.slide}} 张</template><template v-else-if="source.location?.sheet"> · {{source.location.sheet}}<template v-if="source.location?.row"> 第 {{source.location.row}} 行</template></template></small><span class="source-preview">{{ source.text }}</span></span><span class="expand-icon">⌄</span></summary>
-        <div class="source-full"><small>来源片段 · {{ source.number }}</small><p>{{ source.text || '此来源未提供原文片段。' }}</p><router-link v-if="source.document_id && source.location?.page" :to="`/app/knowledge/${source.document_id}#page-${source.location.page}`">查看文档第 {{source.location.page}} 页 →</router-link></div>
+        <div class="source-full"><small>来源片段 · {{ source.number }}</small><p>{{ source.text || '此来源未提供原文片段。' }}</p><template v-if="officialUrl(source)"><a :href="officialUrl(source)" target="_blank" rel="noopener noreferrer">打开官方原文</a><p>获取时间：{{source.retrieved_at}}；查询版本：{{source.version || '未限定'}}。页面版本与发布时间需核实。</p></template><router-link v-if="source.document_id && source.location?.page" :to="`/app/knowledge/${source.document_id}#page-${source.location.page}`">查看文档第 {{source.location.page}} 页 →</router-link></div>
       </details>
     </aside>
   </div>

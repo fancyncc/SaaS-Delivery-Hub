@@ -5,7 +5,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TypedDict
 
-from celery import Celery
+from celery import Celery, Task
 from fastapi import HTTPException
 from langchain_core.runnables import RunnableLambda
 from langgraph.checkpoint.memory import InMemorySaver
@@ -22,7 +22,24 @@ from backend.security import Principal
 from backend.state_machine import ProjectLifecycle, RunLifecycle, transition_project, transition_run
 from backend.workflow import NODES, advance
 
-celery = Celery("implementation", broker=get_settings().redis_url)
+
+class GuardedTask(Task):
+    def __call__(self, *args, **kwargs):
+        async def verify():
+            from backend.runtime_guard import check_runtime_role
+            engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+            try:
+                async with engine.connect() as connection:
+                    await check_runtime_role(connection)
+            finally:
+                await engine.dispose()
+        from backend.observability import setup
+        setup("saas-implementation.worker")
+        asyncio.run(verify())
+        return super().__call__(*args, **kwargs)
+
+
+celery = Celery("implementation", broker=get_settings().redis_url, task_cls=GuardedTask)
 celery.conf.update(
     task_acks_late=True, task_reject_on_worker_lost=True, worker_prefetch_multiplier=1,
     task_soft_time_limit=240, task_time_limit=300,
@@ -32,15 +49,19 @@ celery.conf.update(
 
 
 async def actor_context(session, event):
-    membership = await session.scalar(select(TenantMembership).where(TenantMembership.user_id == event.actor_id, TenantMembership.tenant_id == event.tenant_id, TenantMembership.status == "active"))
-    user = await session.get(User, event.actor_id)
-    tenant = await session.get(Tenant, event.tenant_id)
-    if not membership or not user or user.status != "active" or not tenant or tenant.status != "active":
+    membership = await session.scalar(select(TenantMembership).where(TenantMembership.user_id == event.actor_id, TenantMembership.tenant_id == event.tenant_id, TenantMembership.status == "active").execution_options(populate_existing=True))
+    user = await session.get(User, event.actor_id, populate_existing=True)
+    tenant = await session.get(Tenant, event.tenant_id, populate_existing=True)
+    if (not membership or not user or user.status != "active" or user.deleted_at is not None
+            or user.account_type != "customer" or not tenant or tenant.status != "active"
+            or tenant.deleted_at is not None
+            or tenant.kind == "personal" and tenant.personal_owner_id != user.id):
         raise HTTPException(403, "执行人的公司授权已失效")
     if session.bind.dialect.name == "postgresql":
-        for key, value in {"app.current_user_id": user.id, "app.current_tenant_id": event.tenant_id, "app.current_company_role": membership.company_role_code, "app.platform_roles": "", "app.is_platform_admin": "false"}.items():
+        session.info["rls_context"] = {"app.current_user_id": user.id, "app.current_tenant_id": event.tenant_id, "app.current_company_role": membership.company_role_code, "app.platform_roles": "", "app.is_platform_admin": "false"}
+        for key, value in session.info["rls_context"].items():
             await session.execute(text("SELECT set_config(:key, :value, true)"), {"key": key, "value": value})
-    return Principal(user_id=user.id, subject=user.email or user.username, email=user.email or "", username=user.username, display_name=user.display_name, tenant_id=tenant.id, tenant_name=tenant.name, account_type=user.account_type, session_context="customer", role=Role.TENANT_ADMIN if membership.company_role_code == "company_admin" else Role.TENANT_MEMBER, is_platform_admin=False, company_role_code=membership.company_role_code, platform_roles=(), session_id="worker")
+    return Principal(user_id=user.id, subject=user.email or user.username, email=user.email or "", username=user.username, display_name=user.display_name, tenant_id=tenant.id, tenant_name=tenant.name, account_type=user.account_type, session_context="customer", role=Role.TENANT_ADMIN if membership.company_role_code == "company_admin" else Role.TENANT_MEMBER, is_platform_admin=False, company_role_code=membership.company_role_code, platform_roles=(), session_id="worker", workspace_kind=tenant.kind)
 
 
 class Cursor(TypedDict):
@@ -57,6 +78,25 @@ def next_node(run: AgentRun) -> str:
 
 
 async def process_event(event_id: str, *, checkpointer=None, raise_errors: bool = False) -> None:
+    from backend.observability import setup, span
+    setup("saas-implementation.worker")
+    engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+    try:
+        from backend.runtime_guard import check_runtime_role
+        async with engine.connect() as connection:
+            await check_runtime_role(connection)
+        async with async_sessionmaker(engine)() as session:
+            event = await session.get(WorkflowOutbox, event_id)
+            if not event or event.processed:
+                return
+            parent = event.trace_context
+        with span("worker.consume", parent=parent, event_id=event_id):
+            await _process_event(event_id, checkpointer=checkpointer, raise_errors=raise_errors)
+    finally:
+        await engine.dispose()
+
+
+async def _process_event(event_id: str, *, checkpointer=None, raise_errors: bool = False) -> None:
     engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
@@ -156,7 +196,7 @@ async def publish():
         async with factory() as session:
             events = (await session.scalars(select(WorkflowOutbox).where(WorkflowOutbox.processed.is_(False), WorkflowOutbox.next_attempt_at <= datetime.now(UTC)).limit(100).with_for_update(skip_locked=True))).all()
             for event in events:
-                execute.delay(event.id)
+                execute.apply_async(args=[event.id], headers=event.trace_context)
                 # A lost message is republished. An active consumer owns a row lock.
                 event.next_attempt_at = datetime.now(UTC) + timedelta(seconds=60)
             await session.commit()
@@ -167,6 +207,20 @@ async def publish():
 @celery.task(name="implementation.dispatch")
 def dispatch_outbox():
     asyncio.run(publish())
+
+
+@celery.task(name="implementation.health_probe")
+def health_probe(identifier: str):
+    # No business data or email; an expiring canary proves real queue consumption.
+    import re
+
+    from redis import Redis
+    if not re.fullmatch(r"[0-9a-f]{32}", identifier):
+        raise ValueError("Invalid acceptance identifier")
+    from backend.observability import span
+    with span("worker.health_probe", parent=dict(health_probe.request.headers or {})):
+        with Redis.from_url(get_settings().redis_url, socket_timeout=3, socket_connect_timeout=3) as client:
+            client.set(f"acceptance:worker:{identifier}", "consumed", ex=60)
 
 
 @celery.task(name="implementation.mail")
@@ -202,8 +256,8 @@ async def index_knowledge():
                     await process_sources(session, tenant_id)
                 else:
                     await process_pending(session, tenant_id)
-                if get_settings().rag_v3_indexing_enabled:
-                    from backend.rag_v3_index import process
+                if get_settings().retrieval_indexing_enabled:
+                    from backend.knowledge_index import process
                     await process(session, tenant_id)
                 await session.commit()
     finally:

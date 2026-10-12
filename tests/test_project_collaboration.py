@@ -4,6 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from backend.db import SessionLocal
+from backend.knowledge_index_models import IndexedDocument
 from backend.models import (
     KnowledgeDocument,
     Project,
@@ -13,7 +14,6 @@ from backend.models import (
     TenantMembership,
     User,
 )
-from backend.rag_v3_models import V3Document
 from tests.test_api import project, role_client
 
 
@@ -31,16 +31,16 @@ async def test_project_member_can_retry_failed_document(client):
         assert uploaded.status_code == 200, uploaded.text
         doc_id = uploaded.json()['data']['id']
         async with SessionLocal() as session:
-            source = await session.scalar(select(V3Document).where(V3Document.origin_id == doc_id))
+            source = await session.scalar(select(IndexedDocument).where(IndexedDocument.origin_id == doc_id))
             source.phase, source.error = 'failed', 'PARSER_ERROR'
             await session.commit()
         assert (await member.get(f'/api/knowledge/{doc_id}')).json()['data']['can_reindex']
         assert not (await viewer.get(f'/api/knowledge/{doc_id}')).json()['data']['can_reindex']
-        assert (await viewer.post(f'/api/knowledge/{doc_id}/v3-index')).status_code == 403
-        assert (await outsider.post(f'/api/knowledge/{doc_id}/v3-index')).status_code == 404
-        retried = await member.post(f'/api/knowledge/{doc_id}/v3-index')
+        assert (await viewer.post(f'/api/knowledge/{doc_id}/reindex')).status_code == 403
+        assert (await outsider.post(f'/api/knowledge/{doc_id}/reindex')).status_code == 404
+        retried = await member.post(f'/api/knowledge/{doc_id}/reindex')
         assert retried.status_code == 200, retried.text
-        assert (await member.get(f'/api/knowledge/{doc_id}')).json()['data']['v3']['phase'] == 'pending'
+        assert (await member.get(f'/api/knowledge/{doc_id}')).json()['data']['index']['phase'] == 'pending'
 
 
 async def test_member_documents_and_tasks(client):

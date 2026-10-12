@@ -128,8 +128,17 @@ async def rerank(query: str, hits: list[dict]) -> list[dict]:
 
 
 async def retrieve(session, tenant_id: str, query: str, limit: int = 5, *, project_ids: list[str] | None = None, knowledge_only: bool = False) -> list[dict]:
+    from backend.observability import span
+    from backend.run_snapshots import record
+    with span("retrieval.knowledge"):
+        hits = await _retrieve(session, tenant_id, query, limit, project_ids=project_ids, knowledge_only=knowledge_only)
+        await record("retrieval", {"query": query, "project_ids": project_ids or [], "evidence": hits})
+        return hits
+
+
+async def _retrieve(session, tenant_id: str, query: str, limit: int = 5, *, project_ids: list[str] | None = None, knowledge_only: bool = False) -> list[dict]:
     if get_settings().rag_mode == "real":
-        from backend.rag_v3_adapter import retrieve_knowledge
+        from backend.knowledge_citations import retrieve_knowledge
         return await retrieve_knowledge(session, tenant_id, query, project_ids=project_ids or [], limit=limit)
     if not query.strip():
         return []
@@ -139,7 +148,7 @@ async def retrieve(session, tenant_id: str, query: str, limit: int = 5, *, proje
         or_(KnowledgeDocument.project_id.is_(None), KnowledgeDocument.project_id.in_(project_ids or [])),
         KnowledgeDocument.index_status == "ready", KnowledgeDocument.index_version == index_identity(),
         ~exists(select(latest.id).where(latest.tenant_id == tenant_id,
-            latest.index_status.not_like('v3_%'),
+            latest.index_status.not_like('indexed_%'),
             latest.title == KnowledgeDocument.title, latest.version > KnowledgeDocument.version)),
         KnowledgePiece.tenant_id == tenant_id, KnowledgePiece.index_version == KnowledgeDocument.index_version]
     base = select(KnowledgePiece, KnowledgeDocument).join(KnowledgeDocument, KnowledgePiece.document_id == KnowledgeDocument.id).where(*valid)

@@ -39,7 +39,26 @@ def strict_schema(value):
 
 
 async def structured(task: str, source: dict, schema: type[T], *, transport=None) -> T:
+    from backend.observability import span
+    from backend.run_snapshots import record
+    scope = model_scope.get()
+    source_record = {"source": source, "agent_context": scope.context} if scope else source
+    with span("model.structured", schema=schema.__name__):
+        try:
+            result = await _structured(task, source, schema, transport=transport)
+        except Exception as exc:
+            await record("model", {"task": task, "source": source_record, "prompt_version": PROMPT_VERSION,
+                                   "schema": schema.model_json_schema(), "status": "failed", "error": type(exc).__name__})
+            raise
+        await record("model", {"task": task, "source": source_record, "prompt_version": PROMPT_VERSION,
+                               "schema": schema.model_json_schema(), "status": "succeeded", "output": result.model_dump(mode="json")})
+        return result
+
+
+async def _structured(task: str, source: dict, schema: type[T], *, transport=None) -> T:
     settings = get_settings()
+    from backend.skill_runtime import instructions
+    skill_instructions = instructions()
     local = settings.llm_mode == "local"
     base_url = settings.llm_local_base_url if local else settings.model_base_url
     model_name = settings.llm_local_model if local else settings.model_name
@@ -52,7 +71,7 @@ async def structured(task: str, source: dict, schema: type[T], *, transport=None
             effective_source = {"source": source, "agent_context": scope.context} if scope else source
             payload: dict[str, Any] = {
                 "model": model_name, "store": False,
-                "instructions": f"Prompt {PROMPT_VERSION}. {task}。{DATA_BOUNDARY}经验只能作为建议，不能证明产品能力或替代审批。不得虚构执行结果，不得批准操作。保留具体角色、数量、权限边界和客户原意。证据不足必须明确说明。",
+                "instructions": f"Prompt {PROMPT_VERSION}. {task}。{DATA_BOUNDARY}经验只能作为建议，不能证明产品能力或替代审批。不得虚构执行结果，不得批准操作。保留具体角色、数量、权限边界和客户原意。证据不足必须明确说明。" + skill_instructions,
                 "input": json.dumps(effective_source, ensure_ascii=False),
                 "text": {"format": {"type": "json_schema", "name": schema.__name__, "strict": True, "schema": strict_schema(schema.model_json_schema())}},
             }
@@ -68,6 +87,9 @@ async def structured(task: str, source: dict, schema: type[T], *, transport=None
             if endpoint == "/responses":
                 payload["max_output_tokens"] = settings.model_max_output_tokens
             reservation = preflight(payload)
+            from backend.run_snapshots import record
+            await record("model_request", {"attempt": attempt + 1, "api_style": settings.model_api_style,
+                                           "prompt_version": PROMPT_VERSION, "payload": payload})
             response = await client.post(base_url.rstrip("/") + endpoint, headers={"Authorization": f"Bearer {api_key}"} if api_key else {}, json=payload)
             if response.status_code in {401, 403}:
                 raise HTTPException(503, "模型服务认证失败")
@@ -88,6 +110,11 @@ async def structured(task: str, source: dict, schema: type[T], *, transport=None
                     output = "".join(part.get("text", "") for item in body.get("output", []) for part in item.get("content", []) if part.get("type") == "output_text")
                     if body.get("status") != "completed":
                         raise ValueError("incomplete")
+                await record("model_response", {"attempt": attempt + 1, "provider_model": body.get("model"),
+                    "provider_response_id": body.get("id"), "usage": body.get("usage"), "output": output})
+                from backend.model_observations import record_model_receipt
+
+                record_model_receipt(body, output)
                 return schema.model_validate_json(output)
             except (ValueError, ValidationError, KeyError, IndexError, TypeError):
                 if attempt == 2:

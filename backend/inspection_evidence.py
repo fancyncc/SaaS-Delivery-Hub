@@ -251,5 +251,5 @@ async def inspect(session, tenant_id, query, project_ids, budget=1200, *, thresh
             "candidates": diagnostics,
         },
         "evidence_text": serialize_evidence(final),
-        "pipeline": "inspection_v2",
+        "pipeline": "inspection",
     }

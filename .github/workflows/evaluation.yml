@@ -1,0 +1,63 @@
+name: Real evaluation
+
+on:
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: Frozen corpus cases path on the evaluation runner
+        required: true
+        type: string
+      freeze:
+        description: Pre-reviewed frozen manifest path
+        required: true
+        type: string
+      baseline:
+        description: Paired baseline recording path
+        required: true
+        type: string
+  schedule:
+    - cron: '0 18 * * 0'
+
+jobs:
+  quality:
+    # Configure an isolated runner with real services and pre-reviewed corpora.
+    runs-on: [self-hosted, evaluation]
+    timeout-minutes: 180
+    env:
+      CASES: ${{ inputs.cases || vars.EVALUATION_CASES }}
+      FREEZE: ${{ inputs.freeze || vars.EVALUATION_FREEZE }}
+      BASELINE: ${{ inputs.baseline || vars.EVALUATION_BASELINE }}
+      SAAS_ENV_FILE: ${{ vars.EVALUATION_ENV_FILE }}
+      RUN_BROWSER_TESTS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -e '.[dev]'
+      - name: Check prerequisites
+        shell: bash
+        run: |
+          test -n "$CASES" && test -f "$CASES"
+          test -n "$FREEZE" && test -f "$FREEZE"
+          test -n "$BASELINE" && test -f "$BASELINE"
+          test -n "$SAAS_ENV_FILE" && test -f "$SAAS_ENV_FILE"
+      - name: Collect and validate retrieval
+        shell: bash
+        run: |
+          mkdir -p "data/evaluations/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          result="data/evaluations/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/record_retrieval_business_runs.py --cases "$CASES" --freeze "$FREEZE" --output "$result/retrieval.json"
+          python scripts/evaluate_retrieval.py validate --cases "$CASES" --runs "$result/retrieval.json" --baseline "$BASELINE" --output "$result/retrieval-score.json"
+      - name: Collect actual answers
+        if: always()
+        shell: bash
+        run: |
+          result="data/evaluations/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          python scripts/evaluate_answers.py collect --cases "$CASES" --runs "$result/retrieval.json" --output "$result/answers.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: real-evaluation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: data/evaluations/${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 30

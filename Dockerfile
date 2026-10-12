@@ -13,8 +13,9 @@ RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
 COPY backend backend
 COPY alembic alembic
 COPY alembic.ini ./
-COPY knowledge knowledge
+COPY skills skills
 COPY evaluations evaluations
+COPY config/evaluation.json config/evaluation.json
 RUN groupadd --system app && useradd --system --gid app --home-dir /app --no-create-home app
 USER app
 CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
