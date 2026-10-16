@@ -1,0 +1,232 @@
+{
+  "advisories": {
+    "1109137": {
+      "findings": [
+        {
+          "version": "7.1.9",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1109137,
+      "title": "vite allows server.fs.deny bypass via backslash on Windows",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.1.0 <=7.1.10",
+      "patched_versions": ">=7.1.11",
+      "severity": "moderate",
+      "cwe": "CWE-22",
+      "github_advisory_id": "GHSA-93m4-6634-74q7",
+      "url": "https://github.com/advisories/GHSA-93m4-6634-74q7"
+    },
+    "1116230": {
+      "findings": [
+        {
+          "version": "7.1.9",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1116230,
+      "title": "Vite Vulnerable to Path Traversal in Optimized Deps `.map` Handling",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.1",
+      "patched_versions": ">=7.3.2",
+      "severity": "moderate",
+      "cwe": "CWE-22, CWE-200",
+      "github_advisory_id": "GHSA-4w7w-66w2-5vf9",
+      "url": "https://github.com/advisories/GHSA-4w7w-66w2-5vf9"
+    },
+    "1116232": {
+      "findings": [
+        {
+          "version": "7.1.9",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1116232,
+      "title": "Vite: `server.fs.deny` bypassed with queries",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.1.0 <=7.3.1",
+      "patched_versions": ">=7.3.2",
+      "severity": "high",
+      "cwe": "CWE-180, CWE-284",
+      "github_advisory_id": "GHSA-v2wj-q39q-566r",
+      "url": "https://github.com/advisories/GHSA-v2wj-q39q-566r"
+    },
+    "1116235": {
+      "findings": [
+        {
+          "version": "7.1.9",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1116235,
+      "title": "Vite Vulnerable to Arbitrary File Read via Vite Dev Server WebSocket",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.1",
+      "patched_versions": ">=7.3.2",
+      "severity": "high",
+      "cwe": "CWE-200, CWE-306",
+      "github_advisory_id": "GHSA-p9ff-h696-f583",
+      "url": "https://github.com/advisories/GHSA-p9ff-h696-f583"
+    },
+    "1120785": {
+      "findings": [
+        {
+          "version": "7.1.9",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1120785,
+      "title": "launch-editor: NTLMv2 hash disclosure via UNC path handling on Windows",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.4",
+      "patched_versions": ">=7.3.5",
+      "severity": "moderate",
+      "cwe": "CWE-73, CWE-522",
+      "github_advisory_id": "GHSA-v6wh-96g9-6wx3",
+      "url": "https://github.com/advisories/GHSA-v6wh-96g9-6wx3"
+    },
+    "1123526": {
+      "findings": [
+        {
+          "version": "7.1.9",
+          "paths": [
+            ".>@vitejs/plugin-vue>vite",
+            ".>vite"
+          ],
+          "dev": true,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1123526,
+      "title": "vite: `server.fs.deny` bypass on Windows alternate paths",
+      "module_name": "vite",
+      "vulnerable_versions": ">=7.0.0 <=7.3.4",
+      "patched_versions": ">=7.3.5",
+      "severity": "high",
+      "cwe": "CWE-22, CWE-200",
+      "github_advisory_id": "GHSA-fx2h-pf6j-xcff",
+      "url": "https://github.com/advisories/GHSA-fx2h-pf6j-xcff"
+    },
+    "1241209": {
+      "findings": [
+        {
+          "version": "1.2.1",
+          "paths": [
+            ".>pinia>vue>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>pinia>vue>@vue/compiler-sfc>@vue/compiler-core>source-map-js",
+            ".>pinia>vue>@vue/compiler-sfc>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>pinia>vue>@vue/compiler-sfc>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>pinia>vue>@vue/compiler-sfc>postcss>source-map-js",
+            ".>pinia>vue>@vue/compiler-sfc>source-map-js",
+            ".>pinia>vue>@vue/server-renderer>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue>@vue/compiler-sfc>@vue/compiler-core>source-map-js",
+            ".>vue>@vue/compiler-sfc>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue>@vue/compiler-sfc>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue>@vue/compiler-sfc>postcss>source-map-js",
+            ".>vue>@vue/compiler-sfc>source-map-js",
+            ".>vue>@vue/server-renderer>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue-router>vue>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue-router>vue>@vue/compiler-sfc>@vue/compiler-core>source-map-js",
+            ".>vue-router>vue>@vue/compiler-sfc>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue-router>vue>@vue/compiler-sfc>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vue-router>vue>@vue/compiler-sfc>postcss>source-map-js",
+            ".>vue-router>vue>@vue/compiler-sfc>source-map-js",
+            ".>vue-router>vue>@vue/server-renderer>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>@vitejs/plugin-vue>vite>postcss>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-sfc>@vue/compiler-core>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-sfc>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-sfc>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-sfc>postcss>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/compiler-sfc>source-map-js",
+            ".>@vitejs/plugin-vue>vue>@vue/server-renderer>@vue/compiler-ssr>@vue/compiler-dom>@vue/compiler-core>source-map-js",
+            ".>vite>postcss>source-map-js",
+            ".>vue-tsc>@vue/language-core>@vue/compiler-dom>@vue/compiler-core>source-map-js"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241209,
+      "title": "source-map-js allows event-loop denial of service through indexed source-map section offsets",
+      "module_name": "source-map-js",
+      "vulnerable_versions": ">=1.0.0 <1.2.2",
+      "patched_versions": ">=1.2.2",
+      "severity": "high",
+      "cwe": "CWE-1284",
+      "github_advisory_id": "GHSA-68fv-2mgg-jv7q",
+      "url": "https://github.com/advisories/GHSA-68fv-2mgg-jv7q"
+    },
+    "1241259": {
+      "findings": [
+        {
+          "version": "3.5.22",
+          "paths": [
+            ".>pinia>vue>@vue/server-renderer",
+            ".>vue>@vue/server-renderer",
+            ".>vue-router>vue>@vue/server-renderer",
+            ".>@vitejs/plugin-vue>vue>@vue/server-renderer"
+          ],
+          "dev": false,
+          "optional": false,
+          "bundled": false
+        }
+      ],
+      "id": 1241259,
+      "title": "@vue/server-renderer: XSS via missing CR in attribute-name blacklist",
+      "module_name": "@vue/server-renderer",
+      "vulnerable_versions": "<3.5.42",
+      "patched_versions": ">=3.5.42",
+      "severity": "high",
+      "cwe": "CWE-79, CWE-116",
+      "github_advisory_id": "GHSA-g2v6-rqmx-r4w6",
+      "url": "https://github.com/advisories/GHSA-g2v6-rqmx-r4w6"
+    }
+  },
+  "metadata": {
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 3,
+      "high": 5,
+      "critical": 0
+    },
+    "dependencies": 38,
+    "devDependencies": 89,
+    "optionalDependencies": 67,
+    "totalDependencies": 127
+  }
+}

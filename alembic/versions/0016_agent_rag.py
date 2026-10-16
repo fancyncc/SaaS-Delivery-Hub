@@ -18,7 +18,7 @@ def upgrade():
         if not version or tuple(int(part) for part in version.split(".")[:2]) < (0, 8):
             raise RuntimeError("Agent RAG requires pgvector >= 0.8; upgrade the extension first")
     columns = {c["name"] for c in sa.inspect(bind).get_columns("knowledge_documents")}
-    with op.batch_alter_table("agent_runs") as batch:
+    with op.batch_alter_table("agent_runs", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_constraint("ck_agent_run_status", type_="check")
         batch.create_check_constraint("ck_agent_run_status", "status IN ('pending','running','preparing_materials','waiting_approval','succeeded','failed','cancelled','blocked')")
     for column in [sa.Column("index_status", sa.String(20), nullable=False, server_default="pending"),
@@ -56,6 +56,6 @@ def downgrade():
     op.drop_index("ix_knowledge_documents_index_status", table_name="knowledge_documents")
     for name in ("index_version", "index_error", "index_attempts", "index_status"):
         op.drop_column("knowledge_documents", name)
-    with op.batch_alter_table("agent_runs") as batch:
+    with op.batch_alter_table("agent_runs", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_constraint("ck_agent_run_status", type_="check")
         batch.create_check_constraint("ck_agent_run_status", "status IN ('pending','running','preparing_materials','waiting_approval','succeeded','failed','cancelled')")

@@ -15,8 +15,6 @@ from backend.models import MailDelivery
 
 
 async def send_account_link(email: str, purpose: str, url: str, *, session: AsyncSession | None = None) -> None:
-    if get_settings().mail_debug:
-        return
     if session is not None:
         session.add(MailDelivery(email=email, purpose=purpose, body=url))
         return
@@ -46,6 +44,8 @@ def smtp_send(item: MailDelivery) -> None:
 
 
 async def flush_mail() -> None:
+    if get_settings().mail_debug:
+        return
     engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
     try:
         factory = async_sessionmaker(engine, expire_on_commit=False)

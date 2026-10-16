@@ -69,7 +69,7 @@ async def search(tenant_id, document_ids, query, *, limit=30):
                 "query": {
                     "bool": {
                         "filter": [
-                            {"term": {"tenant_id": tenant_id}},
+                            ({"terms": {"tenant_id": tenant_id}} if isinstance(tenant_id, list) else {"term": {"tenant_id": tenant_id}}),
                             {"terms": {"document_id": document_ids}},
                         ],
                         "must": [{"match": {"lexemes": query}}],

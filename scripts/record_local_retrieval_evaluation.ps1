@@ -16,7 +16,7 @@ function Invoke-EvaluationDocker([string[]] $Command) {
     if ($LASTEXITCODE -ne 0) { throw "Evaluation command failed: $($Command[0..([Math]::Min(2, $Command.Length - 1))] -join ' ')" }
 }
 
-$ready = Invoke-RestMethod -Uri 'http://localhost:8000/ready' -TimeoutSec 5
+$ready = Invoke-RestMethod -Uri 'http://localhost:8080/ready' -TimeoutSec 5
 if ($ready.status -ne 'ready') { throw 'API is not ready. Complete local deployment first.' }
 $runId = [Guid]::NewGuid().ToString('N')
 $containerDir = "/tmp/retrieval-evaluation-$runId"

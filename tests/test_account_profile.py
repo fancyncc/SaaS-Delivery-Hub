@@ -2,6 +2,8 @@ import asyncio
 
 from test_open_registration import anonymous, commit, headers, token, validate
 
+from tests.mail_helpers import mail_link
+
 
 async def signup(person, username):
     response = await person.post('/api/auth/register', json={'username': username, 'password': 'PersonalPass123'})
@@ -38,7 +40,7 @@ async def test_email_binding_belongs_to_requesting_account():
         body = {'email': ' Contact@Example.com ', 'current_password': 'PersonalPass123'}
         sent = await first.post('/api/auth/profile/email', headers=headers(first), json=body)
         assert sent.status_code == 200, sent.text
-        raw = token(sent.json()['data']['verification_url'])
+        raw = token(await mail_link("email_verification"))
         assert (await first.get('/api/auth/profile')).json()['data']['email'] is None
         assert (await second.post('/api/auth/verify-email', json={'token': raw})).status_code == 403
         assert (await first.post('/api/auth/verify-email', json={'token': raw})).status_code == 200

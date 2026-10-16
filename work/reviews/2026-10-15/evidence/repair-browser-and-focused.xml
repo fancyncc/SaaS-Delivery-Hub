@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="65" time="326.684" timestamp="2026-10-15T22:55:34.846090+08:00" hostname="coco"><testcase classname="tests.test_chat" name="test_upload_retrieve_persist_idempotency_delete" time="8.169" /><testcase classname="tests.test_chat" name="test_private_scope_project_revocation_and_platform" time="4.896" /><testcase classname="tests.test_chat" name="test_history_search_content_recency_and_privacy" time="7.523" /><testcase classname="tests.test_chat" name="test_llm_context_memory_and_failure_are_transactional" time="7.822" /><testcase classname="tests.test_chat" name="test_overview_and_upload_validation" time="6.038" /><testcase classname="tests.test_chat" name="test_knowledge_versions_and_cross_space_isolation" time="8.980" /><testcase classname="tests.test_chat" name="test_general_llm_and_memory_opt_out" time="5.008" /><testcase classname="tests.test_chat" name="test_docx_parser_and_context_does_not_restore_deleted_evidence" time="1.619" /><testcase classname="tests.test_chat" name="test_pdf_text_and_scanned_pdf_rejection" time="1.899" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u8fd9\u4e2a\u5e73\u53f0\u6709\u54ea\u4e9b\u529f\u80fd\u548c\u5165\u53e3-overview]" time="1.543" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u5982\u4f55\u6ce8\u518c\u8d26\u53f7\u5e76\u521b\u5efa\u516c\u53f8\u7a7a\u95f4-registration]" time="1.510" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u516c\u53f8\u7ba1\u7406\u5458\u548c\u9879\u76ee\u7ecf\u7406\u7684\u6743\u9650\u89d2\u8272\u6709\u4ec0\u4e48\u533a\u522b-roles]" time="1.399" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u521b\u5efa\u9879\u76ee\u7684\u7acb\u9879\u6587\u4e66\u5fc5\u586b\u5b57\u6bb5-project]" time="1.468" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u5b9e\u65bd\u6d41\u7a0b\u6709\u51e0\u4e2a\u8282\u70b9\u548c\u9636\u6bb5-workflow]" time="1.746" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u4e3a\u4ec0\u4e48\u4e0d\u80fd\u5ba1\u6279\u81ea\u5df1\u53d1\u8d77\u7684\u8bf7\u6c42-approval]" time="1.682" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u914d\u7f6e\u6a21\u677f\u81ea\u5b9a\u4e49\u5b57\u6bb5\u548c\u63d0\u9192\u652f\u6301\u4ec0\u4e48-configuration]" time="1.690" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[CSV\u6210\u5458\u5bfc\u5165\u91cd\u590d\u90ae\u7bb1\u5982\u4f55\u5904\u7406-imports]" time="1.727" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u6279\u91cf\u9080\u8bf7\u516c\u53f8\u6210\u5458\u6fc0\u6d3b\u767b\u5f55\u8d26\u53f7-company-members]" time="1.664" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u57f9\u8bad\u4ea4\u4ed8\u7269\u4e0b\u8f7d\u548c\u9a8c\u6536\u62a5\u544a-delivery]" time="2.300" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u6267\u884c\u5931\u8d25\u53d6\u6d88\u91cd\u8bd5\u4ee5\u53cablocked\u6062\u590d-recovery]" time="1.663" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u5982\u4f55\u914d\u7f6e\u771f\u5b9eLLM\u6a21\u578b\u548c\u5b9e\u65bd\u667a\u80fd\u4f53-agent]" time="1.580" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u77e5\u8bc6\u5e93\u5411\u91cf\u7d22\u5f15\u91cd\u5efa\u4e0e\u8d44\u6599\u7248\u672c-knowledge]" time="1.764" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u804a\u5929\u9644\u4ef6PDF\u548c\u957f\u671f\u8bb0\u5fc6\u9650\u5236-chat]" time="1.668" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u8de8\u516c\u53f8\u534f\u4f5c\u4e0e\u9650\u65f6\u652f\u6301\u6388\u6743-collaboration]" time="1.624" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u9879\u76ee\u5220\u9664\u56de\u6536\u7ad9\u6062\u590d\u4fdd\u7559\u51e0\u5929-recycle]" time="1.709" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u5e73\u53f0\u540e\u53f0\u8bc4\u6d4bTrace\u76d1\u63a7-platform]" time="1.675" /><testcase classname="tests.test_platform_assistant" name="test_platform_topic_recall[\u51fa\u73b0401 403 409\u62a5\u9519\u5982\u4f55\u6392\u67e5-errors]" time="1.761" /><testcase classname="tests.test_platform_assistant" name="test_api_constraints_come_from_running_schema" time="1.530" /><testcase classname="tests.test_platform_assistant" name="test_platform_answer_without_customer_documents" time="3.368" /><testcase classname="tests.test_platform_assistant" name="test_live_state_changes_and_roles" time="5.488" /><testcase classname="tests.test_platform_assistant" name="test_runtime_does_not_leak_unassigned_projects" time="5.148" /><testcase classname="tests.test_platform_assistant" name="test_llm_receives_platform_identity_and_authoritative_sources" time="3.261" /><testcase classname="tests.test_security_remediation" name="test_public_reset_never_returns_credentials_and_invalidates_all_links" time="3.560" /><testcase classname="tests.test_security_remediation" name="test_forced_password_change_is_enforced_and_rotates_sessions" time="3.219" /><testcase classname="tests.test_security_remediation" name="test_production_configuration_rejects_unsafe_defaults" time="1.886" /><testcase classname="tests.test_security_remediation" name="test_inspection_budget_rejects_before_model" time="12.600" /><testcase classname="tests.test_security_remediation" name="test_concurrency_leases_release_on_exception" time="5.679" /><testcase classname="tests.test_security_remediation" name="test_rate_limit_service_failure_is_closed_in_production" time="1.713" /><testcase classname="tests.test_security_remediation" name="test_pending_parse_cannot_be_submitted_and_snapshot_detects_change" time="4.633" /><testcase classname="tests.test_security_remediation" name="test_physical_cleanup_includes_indexes_with_real_foreign_keys" time="2.165" /><testcase classname="tests.test_security_migration" name="test_security_migration_fresh_upgrade_and_roundtrip" time="10.099" /><testcase classname="tests.test_chat_streaming" name="test_stream_save_and_replay" time="4.821" /><testcase classname="tests.test_chat_streaming" name="test_failure_does_not_save" time="3.132" /><testcase classname="tests.test_chat_streaming" name="test_mcp_discovery_and_ownership" time="6.249" /><testcase classname="tests.test_chat_streaming" name="test_provider_stream_completion[chat_completions]" time="1.703" /><testcase classname="tests.test_chat_streaming" name="test_provider_stream_completion[responses]" time="1.766" /><testcase classname="tests.test_chat_streaming" name="test_query_clarification_and_scope" time="1.780" /><testcase classname="tests.test_chat_streaming" name="test_native_tool_protocol_and_fixed_scope" time="1.691" /><testcase classname="tests.test_chat_streaming" name="test_gateway_ignoring_tools_uses_original_authorized_query" time="1.729" /><testcase classname="tests.test_project_collaboration" name="test_project_member_can_retry_failed_document" time="7.823" /><testcase classname="tests.test_project_collaboration" name="test_member_documents_and_tasks" time="7.319" /><testcase classname="tests.test_project_collaboration" name="test_readonly_and_project_isolation" time="8.150" /><testcase classname="tests.test_project_collaboration" name="test_task_rejection_requires_other_approver_and_returns_to_work" time="5.718" /><testcase classname="tests.test_project_collaboration" name="test_revoked_member_loses_access" time="3.477" /><testcase classname="tests.test_project_collaboration" name="test_collaborating_company_shares_documents_and_tasks" time="4.545" /><testcase classname="tests.test_runtime_guard" name="test_safe_role_and_inherited_privilege_rejection" time="2.948" /><testcase classname="tests.test_runtime_guard" name="test_table_policy_bypass_rejected[can_own]" time="2.102" /><testcase classname="tests.test_runtime_guard" name="test_table_policy_bypass_rejected[can_truncate]" time="2.095" /><testcase classname="tests.test_runtime_guard" name="test_table_policy_bypass_rejected[rls]" time="2.441" /><testcase classname="tests.test_runtime_guard" name="test_table_policy_bypass_rejected[force_rls]" time="2.555" /><testcase classname="tests.test_runtime_guard" name="test_wrong_identity_and_missing_table_rejected" time="2.140" /><testcase classname="tests.test_agent_browser" name="test_agent_progress_and_resume_in_browser" time="27.936" /><testcase classname="tests.test_browser_flow" name="test_browser_80_member_delivery" time="41.149" /><testcase classname="tests.test_browser_onboarding" name="test_browser_register_create_company_and_import" time="13.911"><failure message="AssertionError: Locator expected to be visible&#10;Actual value: None&#10;Error: element(s) not found &#10;Call log:&#10;  - Expect &quot;to_be_visible&quot; with timeout 5000ms&#10;  - waiting for get_by_role(&quot;link&quot;, name=&quot;开发模式：打开验证链接&quot;)&#10;&#10;Aria snapshot:&#10;- banner:&#10;  - link &quot;D SAAS DELIVERY HUB SaaS 交付中枢&quot;:&#10;    - /url: /app&#10;    - text: D SAAS DELIVERY HUB&#10;    - strong: SaaS 交付中枢&#10;  - link &quot;项目管理&quot;:&#10;    - /url: /app&#10;  - link &quot;AI 助手&quot;:&#10;    - /url: /app/chat&#10;  - link &quot;待办与知识库&quot;:&#10;    - /url: /app/workbench&#10;  - link &quot;RAG 查验&quot;:&#10;    - /url: /app/rag-check&#10;  - link &quot;空间与账号&quot;:&#10;    - /url: /app/spaces&#10;  - link &quot;个人主页&quot;:&#10;    - /url: /app/profile&#10;  - button &quot;退出&quot;&#10;- main:&#10;  - text: PERSONAL CENTER&#10;  - heading &quot;个人主页&quot; [level=1]&#10;  - paragraph: 管理你的账号和联系方式，随时回到自己的工作节奏。&#10;  - link &quot;管理我的空间&quot;:&#10;    - /url: /app/spaces&#10;  - status: 验证邮件已发送，请打开邮件中的链接完成绑定。&#10;  - complementary:&#10;    - heading &quot;browser-open&quot; [level=2]&#10;    - paragraph: &quot;@browser-open&quot;&#10;    - text: 账号已开通&#10;    - term: 加入时间&#10;    - definition: 2026/10/15&#10;    - term: 当前空间&#10;    - definition: browser-open的个人空间&#10;    - link &quot;进入实施工作台&quot;:&#10;      - /url: /app&#10;  - text: 01 / ACCOUNT&#10;  - heading &quot;账号资料&quot; [level=2]&#10;  - text: 账号密码登录 账号&#10;  - textbox &quot;账号&quot;: browser-open&#10;  - text: 昵称&#10;  - textbox &quot;昵称&quot;: browser-open&#10;  - text: 当前密码&#10;  - textbox &quot;当前密码&quot;:&#10;    - /placeholder: 输入当前密码后保存账号资料&#10;  - text: 修改账号后，使用新账号名称登录；已绑定邮箱仍可使用。&#10;  - button &quot;保存资料&quot;&#10;  - text: 02 / EMAIL&#10;  - heading &quot;邮箱绑定&quot; [level=2]&#10;  - text: 未绑定&#10;  - paragraph: 用于接收公司邀请、账号通知和找回密码。&#10;  - text: 邮箱&#10;  - textbox &quot;邮箱&quot;:&#10;    - /placeholder: name@example.com&#10;    - text: browser-open@example.com&#10;  - text: 邮箱绑定确认密码&#10;  - textbox &quot;邮箱绑定确认密码&quot;:&#10;    - /placeholder: 输入当前账号密码&#10;  - text: 验证链接 1 小时内有效，请在当前账号登录后打开。&#10;  - button &quot;发送绑定邮件&quot;&#10;  - text: 03 / MOBILE&#10;  - heading &quot;手机号&quot; [level=2]&#10;  - text: 未填写&#10;  - paragraph: 暂不发送短信验证码。手机号仅作为联系信息，不用于登录和找回密码。&#10;  - text: 手机号&#10;  - textbox &quot;手机号&quot;:&#10;    - /placeholder: 大陆手机号或带国际区号的号码&#10;  - text: 手机号保存确认密码&#10;  - textbox &quot;手机号保存确认密码&quot;:&#10;    - /placeholder: 输入当前账号密码&#10;  - text: 大陆手机号自动补全 +86，清空号码可移除。&#10;  - button &quot;保存手机号&quot;">tests\test_browser_onboarding.py:49: in test_browser_register_create_company_and_import
+    await expect(page.get_by_text("验证邮件已发送", exact=False)).to_be_visible()
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: Locator expected to be visible
+E   Actual value: None
+E   Error: element(s) not found 
+E   Call log:
+E     - Expect "to_be_visible" with timeout 5000ms
+E     - waiting for get_by_role("link", name="开发模式：打开验证链接")
+E   
+E   Aria snapshot:
+E   - banner:
+E     - link "D SAAS DELIVERY HUB SaaS 交付中枢":
+E       - /url: /app
+E       - text: D SAAS DELIVERY HUB
+E       - strong: SaaS 交付中枢
+E     - link "项目管理":
+E       - /url: /app
+E     - link "AI 助手":
+E       - /url: /app/chat
+E     - link "待办与知识库":
+E       - /url: /app/workbench
+E     - link "RAG 查验":
+E       - /url: /app/rag-check
+E     - link "空间与账号":
+E       - /url: /app/spaces
+E     - link "个人主页":
+E       - /url: /app/profile
+E     - button "退出"
+E   - main:
+E     - text: PERSONAL CENTER
+E     - heading "个人主页" [level=1]
+E     - paragraph: 管理你的账号和联系方式，随时回到自己的工作节奏。
+E     - link "管理我的空间":
+E       - /url: /app/spaces
+E     - status: 验证邮件已发送，请打开邮件中的链接完成绑定。
+E     - complementary:
+E       - heading "browser-open" [level=2]
+E       - paragraph: "@browser-open"
+E       - text: 账号已开通
+E       - term: 加入时间
+E       - definition: 2026/10/15
+E       - term: 当前空间
+E       - definition: browser-open的个人空间
+E       - link "进入实施工作台":
+E         - /url: /app
+E     - text: 01 / ACCOUNT
+E     - heading "账号资料" [level=2]
+E     - text: 账号密码登录 账号
+E     - textbox "账号": browser-open
+E     - text: 昵称
+E     - textbox "昵称": browser-open
+E     - text: 当前密码
+E     - textbox "当前密码":
+E       - /placeholder: 输入当前密码后保存账号资料
+E     - text: 修改账号后，使用新账号名称登录；已绑定邮箱仍可使用。
+E     - button "保存资料"
+E     - text: 02 / EMAIL
+E     - heading "邮箱绑定" [level=2]
+E     - text: 未绑定
+E     - paragraph: 用于接收公司邀请、账号通知和找回密码。
+E     - text: 邮箱
+E     - textbox "邮箱":
+E       - /placeholder: name@example.com
+E       - text: browser-open@example.com
+E     - text: 邮箱绑定确认密码
+E     - textbox "邮箱绑定确认密码":
+E       - /placeholder: 输入当前账号密码
+E     - text: 验证链接 1 小时内有效，请在当前账号登录后打开。
+E     - button "发送绑定邮件"
+E     - text: 03 / MOBILE
+E     - heading "手机号" [level=2]
+E     - text: 未填写
+E     - paragraph: 暂不发送短信验证码。手机号仅作为联系信息，不用于登录和找回密码。
+E     - text: 手机号
+E     - textbox "手机号":
+E       - /placeholder: 大陆手机号或带国际区号的号码
+E     - text: 手机号保存确认密码
+E     - textbox "手机号保存确认密码":
+E       - /placeholder: 输入当前账号密码
+E     - text: 大陆手机号自动补全 +86，清空号码可移除。
+E     - button "保存手机号"</failure></testcase><testcase classname="tests.test_chat_browser" name="test_chat_upload_memory_and_reload" time="22.287" /></testsuite></testsuites>

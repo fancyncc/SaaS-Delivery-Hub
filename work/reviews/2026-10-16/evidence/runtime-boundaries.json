@@ -1,0 +1,8 @@
+{
+  "ready": {
+    "status": "ready",
+    "schema_revision": "0034_security_remediation"
+  },
+  "anonymous_redis_denied": true,
+  "proxy_above_1mib_reaches_csrf_guard": 403
+}

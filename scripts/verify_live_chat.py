@@ -43,7 +43,7 @@ async def main():
         if "--in-process" in sys.argv:
             from backend.main import app
             transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=180, transport=transport,
+        async with httpx.AsyncClient(base_url="http://127.0.0.1:8080", timeout=180, transport=transport,
                 cookies={"saas_session": token, "saas_csrf": csrf}, headers={"X-CSRF-Token": csrf}) as client:
             response = await client.post('/api/chat/conversations', json={})
             assert response.status_code == 200, f"conversation create HTTP {response.status_code}"

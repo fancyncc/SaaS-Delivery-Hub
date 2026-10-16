@@ -48,7 +48,7 @@ async def search(tenant_id, source_ids, query):
         return []
     async with client() as http:
         response = await http.post(f"/{index()}/_search", json={"size": 30, "_source": False,
-            "query": {"bool": {"filter": [{"term": {"tenant_id": tenant_id}},
+            "query": {"bool": {"filter": [({"terms": {"tenant_id": tenant_id}} if isinstance(tenant_id, list) else {"term": {"tenant_id": tenant_id}}),
                 {"terms": {"source_id": source_ids}}], "must": [{"match": {"lexemes": query}}]}}})
         response.raise_for_status()
         try:

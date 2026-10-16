@@ -46,6 +46,17 @@ def test_topic_only_candidate_cannot_answer_a_requested_attribute():
     assert assessment["covered_atoms"] == [] and "brand" in assessment["missing_atoms"]
 
 
+def test_trigger_statements_answer_conditions_without_requiring_the_same_noun():
+    frame = decompose_question('XL-107 项目回滚触发条件是什么？')
+    source = hit('triggers', '任意跨站数据泄露立即停止服务并启动回滚；核心创建接口错误率连续 10 分钟超过 5%，或最终对账差异无法在 30 分钟内清除，也触发回滚。', '回滚触发与责任')
+    assessment = assess_candidate(frame, source)
+    assert assessment['label'] == SUPPORT
+    assert assessment['covered_atoms'] == ['condition']
+    unrelated = assess_candidate(frame, hit('steps', '恢复切换前快照，验证登录和工单数量。', '回滚步骤'))
+    assert unrelated['label'] == TOPIC_ONLY
+    assert unrelated['missing_atoms'] == ['condition']
+
+
 def test_cross_language_candidate_can_support_an_explicit_attribute():
     question = "Which region stores the backup archives?"
     assessment = assess_candidate(

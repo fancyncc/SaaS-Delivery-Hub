@@ -353,10 +353,11 @@ async def test_actual_answer_adapter_records_both_evidence_modes_and_provider_us
         body = json.loads(request.content)
         requests.append(body)
         assert "necessary_facts" not in str(body) and "protected_conditions" not in str(body)
+        citation_id = json.loads(body["messages"][-1]["content"])["evidence"][0]["id"]
         return httpx.Response(200, json={"id": "response", "model": "probe-pinned",
             "usage": {"prompt_tokens": 80, "completion_tokens": 15},
             "choices": [{"finish_reason": "stop", "message": {"content": json.dumps({
-                "answer": "limit 17; only after approval [1]", "citation_ids": ["unit"]})}}]})
+                "answer": "limit 17; only after approval [1]", "citation_ids": [citation_id]})}}]})
     async def adapter(task, source, schema, **kwargs):
         return await original(task, source, schema, transport=httpx.MockTransport(provider))
     monkeypatch.setattr(intelligence, "_structured", adapter)

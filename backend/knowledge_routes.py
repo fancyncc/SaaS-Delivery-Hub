@@ -19,6 +19,7 @@ from backend.config import get_settings
 from backend.db import get_session
 from backend.knowledge import index_document
 from backend.models import KnowledgeDocument, Project, ProjectTask, ProjectTaskDocument, User
+from backend.resource_limits import retrieval_budget, upload_budget
 from backend.security import Principal, current_principal, require_company_admin
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])
@@ -37,7 +38,7 @@ async def authorize_submission(session, project_id, user, task_id=None):
             task = await session.scalar(
                 select(ProjectTask).where(
                     ProjectTask.id == str(task_id), ProjectTask.project_id == project.id
-                )
+                ).with_for_update()
             )
             if not task:
                 raise HTTPException(404, "任务不存在")
@@ -68,7 +69,7 @@ class RagInspectRequest(BaseModel):
     evidence_budget: Literal[600, 1200, 1800] = 1200
 
 
-@router.post("/inspect")
+@router.post("/inspect", dependencies=[Depends(retrieval_budget)])
 async def inspect_rag(
     payload: RagInspectRequest,
     user: Principal = Depends(current_principal),
@@ -95,7 +96,8 @@ async def inspect_rag(
         result = (
             await inspect(session, user.tenant_id, question, project_ids, payload.evidence_budget)
             if needed
-            else {"pipeline": "retrieval", "status": "not_needed", "chunks": [], "evidence_text": ""}
+            else {"pipeline": "retrieval", "status": "not_needed", "retrieval_executed": False,
+                  "chunks": [], "evidence_text": ""}
         )
     except HTTPException:
         raise
@@ -126,7 +128,7 @@ class KnowledgeUpload(BaseModel):
     body: str = Field(min_length=20, max_length=30000)
 
 
-@router.post("/files")
+@router.post("/files", dependencies=[Depends(upload_budget)])
 async def upload_file(
     request: Request,
     file: UploadFile,
@@ -183,6 +185,7 @@ async def upload_file(
     session.add(item)
     await session.flush()
     if task:
+        task.version += 1
         session.add(
             ProjectTaskDocument(
                 tenant_id=task.tenant_id,
@@ -220,7 +223,10 @@ async def upload_file(
 async def list_documents(
     user: Principal = Depends(current_principal), session: AsyncSession = Depends(get_session)
 ):
+    from backend.knowledge_index import identity, index_state
     from backend.knowledge_index_models import IndexedDocument
+
+    current_identity = identity()
 
     rows = (
         await session.scalars(
@@ -250,7 +256,7 @@ async def list_documents(
                 "source": d.source,
                 "license": d.license,
                 "active": d.active,
-                "index_status": (f"indexed_{indexed[d.id].phase}" if d.id in indexed
+                "index_status": (f"indexed_{index_state(indexed[d.id], current_identity=current_identity)}" if d.id in indexed
                                  else "indexed_missing_original" if d.source.lower().endswith((".pdf", ".pptx", ".xlsx"))
                                  else "indexed_unsupported" if d.source.lower().endswith((".doc", ".ppt", ".xls"))
                                  else "indexed_pending"),
@@ -268,7 +274,7 @@ async def list_documents(
     }
 
 
-@router.post("")
+@router.post("", dependencies=[Depends(upload_budget)])
 async def upload_document(
     payload: KnowledgeUpload,
     request: Request,
@@ -303,6 +309,7 @@ async def upload_document(
     session.add(item)
     await session.flush()
     if task:
+        task.version += 1
         session.add(
             ProjectTaskDocument(
                 tenant_id=task.tenant_id,
@@ -347,6 +354,7 @@ async def read_document(
     )
     if item is None:
         raise HTTPException(404, "文档不存在或无权访问")
+    from backend.knowledge_index import index_state
     from backend.knowledge_index_models import IndexedDocument
 
     indexed = await session.scalar(
@@ -355,7 +363,8 @@ async def read_document(
         )
     )
     can_reindex = False
-    if indexed and indexed.phase == "failed" and item.active and user.session_context == "customer":
+    state = index_state(indexed)
+    if indexed and state in {"failed", "stale"} and item.active and user.session_context == "customer":
         if item.project_id:
             project = await accessible_project_or_404(session, item.project_id, user)
             access = await project_access(session, project, user)
@@ -374,7 +383,7 @@ async def read_document(
             "license": item.license,
             "active": item.active,
             "can_reindex": can_reindex,
-            "index_status": (f"indexed_{indexed.phase}" if indexed else
+            "index_status": (f"indexed_{state}" if indexed else
                              "indexed_missing_original" if item.source.lower().endswith((".pdf", ".pptx", ".xlsx")) else
                              "indexed_unsupported" if item.source.lower().endswith((".doc", ".ppt", ".xls")) else
                              item.index_status),
@@ -382,7 +391,7 @@ async def read_document(
                             "原始文件未保存，请重新上传" if item.source.lower().endswith((".pdf", ".pptx", ".xlsx")) else
                             item.index_error),
             "index": {
-                "phase": indexed.phase,
+                "phase": state,
                 "error": indexed.error,
                 "warnings": indexed.warnings,
                 "filename": indexed.filename,
@@ -394,7 +403,7 @@ async def read_document(
     }
 
 
-@router.post("/{document_id}/reindex")
+@router.post("/{document_id}/reindex", dependencies=[Depends(upload_budget)])
 async def reindex(
     document_id: UUID,
     request: Request,
@@ -432,6 +441,7 @@ async def reindex(
     source = await register(session, item)
     source.phase = "pending"
     source.attempts = 0
+    source.next_attempt = 0
     source.error = ""
     if item.index_status.startswith(("indexed_", "v3_")):
         item.index_status = "indexed_pending"

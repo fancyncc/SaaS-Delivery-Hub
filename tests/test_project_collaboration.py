@@ -43,7 +43,7 @@ async def test_project_member_can_retry_failed_document(client):
         assert (await member.get(f'/api/knowledge/{doc_id}')).json()['data']['index']['phase'] == 'pending'
 
 
-async def test_member_documents_and_tasks(client):
+async def test_member_documents_and_tasks(client, monkeypatch):
     p = await project(client)
     member = await role_client(client, p['id'], 'customer_contact', 'contributor@example.com')
     approver = await role_client(client, p['id'], 'approver', 'task-approver@example.com')
@@ -81,8 +81,18 @@ async def test_member_documents_and_tasks(client):
             'module':'任务交付', 'license':'项目内部使用'},
             files={'file':('requirements.md', '# 需求整理\n已完成部门需求整理。'.encode(), 'text/markdown')})
         assert evidence.status_code == 200, evidence.text
+        # Upload increments the task version; unparsed files cannot enter review.
+        pending = await member.post(f"{base}/{task['id']}/actions/submit_review", json={'expected_version':3})
+        assert pending.status_code == 409
+        from backend.knowledge_index import index_document
+        from tests.test_retrieval import fake_counts
+        monkeypatch.setattr('backend.knowledge_index.model_counts', fake_counts)
+        async with SessionLocal() as session:
+            source = await session.scalar(select(IndexedDocument).where(IndexedDocument.origin_id == evidence.json()['data']['id']))
+            await index_document(session, source)
+            await session.commit()
         submitted = await member.post(f"{base}/{task['id']}/actions/submit_review",
-                                      json={'expected_version':2,'comment':'请审批需求整理结果'})
+                                      json={'expected_version':3,'comment':'请审批需求整理结果'})
         assert submitted.status_code == 200 and submitted.json()['data']['status'] == 'pending_review'
         waiting = next(x for x in (await member.get(base)).json()['data']['tasks'] if x['id'] == task['id'])
         assert waiting['documents'][0]['title'] == '需求整理交付物'
@@ -138,7 +148,7 @@ async def test_task_rejection_requires_other_approver_and_returns_to_work(client
             'body':'这是用于任务审批的培训方案交付文档，包含培训对象、课程内容和验收方式。'})
         assert uploaded.status_code == 200, uploaded.text
         submitted = await submitter.post(f"{base}/{task['id']}/actions/submit_review",
-                                         json={'expected_version':started['version'],'comment':'请审核'})
+                                         json={'expected_version':started['version'] + 1,'comment':'请审核'})
         assert submitted.status_code == 200
         waiting = next(x for x in (await submitter.get(base)).json()['data']['tasks'] if x['id']==task['id'])
         review_id = waiting['latest_review']['id']

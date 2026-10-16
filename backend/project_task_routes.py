@@ -1,3 +1,4 @@
+import hashlib
 from datetime import date
 from typing import Literal
 from uuid import UUID
@@ -78,6 +79,7 @@ def task_view(item, documents=(), review=None, names=None):
         "submitter_name": names.get(review.submitted_by, ""), "decided_by": review.decided_by,
         "decider_name": names.get(review.decided_by, ""), "created_at": review.created_at,
         "decided_at": review.decided_at,
+        "documents": review.document_snapshot,
     }
     return data
 
@@ -121,7 +123,7 @@ async def list_tasks(project_id: UUID, user: Principal = Depends(current_princip
                                  .order_by(ProjectTask.created_at.desc(), ProjectTask.id))).all()
     members = (await session.execute(participants(project))).all()
     task_ids = [item.id for item in rows]
-    document_map = {task_id: [] for task_id in task_ids}
+    document_map: dict[str, list[KnowledgeDocument]] = {task_id: [] for task_id in task_ids}
     if task_ids:
         query = (select(ProjectTaskDocument.task_id, KnowledgeDocument)
                  .join(KnowledgeDocument, KnowledgeDocument.id == ProjectTaskDocument.document_id)
@@ -135,7 +137,7 @@ async def list_tasks(project_id: UUID, user: Principal = Depends(current_princip
     for review in reviews:
         review_map[review.task_id] = review
     user_ids = {value for review in reviews for value in (review.submitted_by, review.decided_by) if value}
-    names = dict((await session.execute(select(User.id, User.display_name).where(User.id.in_(user_ids)))).all()) if user_ids else {}
+    names = {key: name for key, name in (await session.execute(select(User.id, User.display_name).where(User.id.in_(user_ids)))).all()} if user_ids else {}
     return {"data": {"tasks": [task_view(item, document_map[item.id], review_map.get(item.id), names) for item in rows],
                      "members": [{"id": m.id, "display_name": m.display_name} for m in members],
                      "current_user_id": user.user_id, "can_approve": "approval.decide" in access["permissions"]}}
@@ -205,10 +207,11 @@ async def task_action(project_id: UUID, task_id: UUID, action: Literal["start", 
             ProjectTaskDocument.task_id == item.id)))
         if not document_ids:
             raise HTTPException(422, "提交审批前至少需要提交一份任务文档")
+        snapshot = await document_snapshot(session, document_ids)
         round_number = 1 + (await session.scalar(select(func.max(ProjectTaskReview.round)).where(
             ProjectTaskReview.task_id == item.id)) or 0)
         session.add(ProjectTaskReview(tenant_id=project.tenant_id, project_id=project.id, task_id=item.id,
-            round=round_number, document_ids=document_ids, submission_comment=payload.comment.strip(),
+            round=round_number, document_ids=document_ids, document_snapshot=snapshot, submission_comment=payload.comment.strip(),
             submitted_by=user.user_id))
         item.status = "pending_review"
     item.version += 1
@@ -237,6 +240,9 @@ async def decide_task_review(project_id: UUID, task_id: UUID, review_id: UUID, p
         raise HTTPException(403, "提交人不能审批自己的任务")
     if payload.decision == "rejected" and not payload.comment.strip():
         raise HTTPException(422, "驳回必须填写修改意见")
+    if payload.decision == "approved":
+        if not review.document_snapshot or await document_snapshot(session, review.document_ids) != review.document_snapshot:
+            raise HTTPException(409, "审批材料已变化或缺少冻结快照，请驳回后重新提交")
     review.status, review.decision_comment = payload.decision, payload.comment.strip()
     review.decided_by, review.decided_at, review.version = user.user_id, utcnow(), review.version + 1
     item.status = "done" if payload.decision == "approved" else "changes_requested"
@@ -246,3 +252,18 @@ async def decide_task_review(project_id: UUID, task_id: UUID, review_id: UUID, p
                             {"project_id": project.id, "task_id": item.id, "comment": payload.comment}))
     await session.commit()
     return {"data": task_view(item, review=review)}
+
+
+async def document_snapshot(session, document_ids):
+    from backend.knowledge_index_models import IndexedDocument
+    rows = list(await session.scalars(select(KnowledgeDocument).where(
+        KnowledgeDocument.id.in_(document_ids)).order_by(KnowledgeDocument.id).with_for_update()))
+    if len(rows) != len(document_ids) or any(not d.active or not d.body.strip() for d in rows):
+        raise HTTPException(409, "审批材料已停用或尚未完成解析")
+    sources = {s.origin_id: s for s in await session.scalars(select(IndexedDocument).where(
+        IndexedDocument.origin_id.in_(document_ids)).order_by(IndexedDocument.id))}
+    if any(d.index_status.startswith("indexed_") and (d.id not in sources or sources[d.id].phase != "ready") for d in rows):
+        raise HTTPException(409, "请等待任务文档解析和索引完成后再提交审批")
+    return [{"id": d.id, "title": d.title, "version": d.version, "source": d.source,
+             "body": d.body, "sha256": hashlib.sha256(d.body.encode()).hexdigest(),
+             "raw_sha256": sources[d.id].digest if d.id in sources else ""} for d in rows]

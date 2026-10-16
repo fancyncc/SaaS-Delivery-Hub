@@ -65,10 +65,14 @@ try {
 
     Invoke-DockerChecked @('compose', '--profile', 'rag', '--profile', 'agent', 'up', '-d', '--build',
         'retrieval', 'api', 'worker', 'indexer', 'beat', 'web')
+    # Network/port configuration changes can recreate PostgreSQL while retaining
+    # its volume. Never reuse the pre-deployment container ID for later checks.
+    $postgres = (& docker compose ps -q postgres | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $postgres) { throw 'PostgreSQL container is not running after deployment.' }
     $ready = $null
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         try {
-            $ready = Invoke-RestMethod -Uri 'http://localhost:8000/ready' -TimeoutSec 5
+            $ready = Invoke-RestMethod -Uri 'http://localhost:8080/ready' -TimeoutSec 5
             if ($ready.status -eq 'ready' -and $ready.schema_revision -eq $head) { break }
         } catch { }
         Start-Sleep -Seconds 2
@@ -95,7 +99,7 @@ try {
     $lastBackfillState = ''
     $indexSynchronized = $false
     for ($attempt = 0; $attempt -lt 180; $attempt++) {
-        $query = "SELECT count(*) FILTER (WHERE phase='ready' AND identity='$indexIdentity'), count(*) FILTER (WHERE phase='failed'), count(*) FROM retrieval_documents;"
+        $query = "SELECT count(*) FILTER (WHERE s.phase='ready' AND s.identity='$indexIdentity'), count(*) FILTER (WHERE s.phase='failed'), count(*) FROM knowledge_documents d LEFT JOIN retrieval_documents s ON s.origin_id=d.id AND s.tenant_id=d.tenant_id WHERE d.active AND NOT EXISTS (SELECT 1 FROM knowledge_documents n WHERE n.tenant_id=d.tenant_id AND n.title=d.title AND n.version>d.version) AND d.source !~* '\.(doc|ppt|xls)$';"
         $backfillState = ((& docker exec $postgres psql -U $owner -d $database -At -F '|' -c $query) -join '').Trim()
         if ($LASTEXITCODE -ne 0 -or $backfillState -notmatch '^\d+\|\d+\|\d+$') {
             throw 'Unable to inspect the 知识检索 index backfill state.'

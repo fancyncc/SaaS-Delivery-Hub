@@ -11,7 +11,7 @@ function Invoke-BusinessDocker([string[]] $Command) {
     & docker.exe @Command
     if ($LASTEXITCODE -ne 0) { throw 'Business evaluation Docker command failed.' }
 }
-$ready = Invoke-RestMethod 'http://localhost:8000/ready' -TimeoutSec 5
+$ready = Invoke-RestMethod 'http://localhost:8080/ready' -TimeoutSec 5
 if ($ready.status -ne 'ready') { throw 'API is not ready.' }
 $runId = [Guid]::NewGuid().ToString('N')
 $containerDir = "/tmp/retrieval-business-$runId"

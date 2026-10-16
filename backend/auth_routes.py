@@ -25,6 +25,7 @@ from backend.rate_limit import clear_rate_limit, enforce_rate_limit
 from backend.schemas import (
     InvitationAcceptRequest,
     LoginRequest,
+    PasswordChangeRequest,
     PasswordForgotRequest,
     PasswordResetRequest,
 )
@@ -177,6 +178,7 @@ async def me(user: Principal = Depends(current_principal), session: AsyncSession
             "tenant_name": user.tenant_name,
             "workspace_kind": user.workspace_kind,
             "email_verified": bool(account and account.email_verified_at),
+            "must_change_password": bool(account and account.must_change_password),
             "company_creation_requires_verified_email": get_settings().require_verified_email_for_company,
             "account_type": user.account_type,
             "session_context": user.session_context,
@@ -369,8 +371,6 @@ async def forgot_password(
         await send_account_link(user.email, "password-reset", preview_url, session=session)
         await session.commit()
     data = {"message": "如果邮箱存在，重置链接将发送至该邮箱"}
-    if get_settings().mail_debug and preview_url:
-        data["preview_url"] = preview_url
     return {"data": data}
 
 
@@ -391,12 +391,22 @@ async def reset_password(
     )
     if not row:
         raise HTTPException(410, "重置链接无效或已过期")
-    user = await session.get(User, row.user_id)
-    if not user or user.deleted_at is not None:
+    # All password changes serialize on the account, then consume the token atomically.
+    user = await session.scalar(select(User).where(User.id == row.user_id).with_for_update())
+    if not user or user.deleted_at is not None or user.status != "active":
+        raise HTTPException(410, "重置链接无效或已过期")
+    now = datetime.now(UTC)
+    consumed = await session.scalar(update(PasswordResetToken).where(
+        PasswordResetToken.id == row.id, PasswordResetToken.used_at.is_(None),
+        PasswordResetToken.expires_at > now,
+    ).values(used_at=now).returning(PasswordResetToken.id).execution_options(synchronize_session=False))
+    if not consumed:
         raise HTTPException(410, "重置链接无效或已过期")
     user.password_hash = hash_password(payload.password)
     user.must_change_password = False
-    row.used_at = datetime.now(UTC)
+    await session.execute(update(PasswordResetToken).where(
+        PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None),
+    ).values(used_at=now))
     await session.execute(
         update(AuthSession)
         .where(AuthSession.user_id == user.id, AuthSession.revoked_at.is_(None))
@@ -404,3 +414,31 @@ async def reset_password(
     )
     await session.commit()
     return {"data": {"reset": True}}
+
+
+@router.post("/password/change")
+async def change_password(payload: PasswordChangeRequest, request: Request, response: Response,
+                          principal: Principal = Depends(current_principal),
+                          session: AsyncSession = Depends(get_session)):
+    await enforce_rate_limit(f"password-change:{principal.user_id}", 5, 900)
+    validate_password(payload.password)
+    user = await session.scalar(select(User).where(User.id == principal.user_id).with_for_update())
+    if not user or not verify_password(user.password_hash, payload.current_password):
+        raise HTTPException(400, "当前密码错误")
+    if verify_password(user.password_hash, payload.password):
+        raise HTTPException(422, "新密码不能与当前密码相同")
+    user.password_hash = hash_password(payload.password)
+    user.must_change_password = False
+    now = datetime.now(UTC)
+    await session.execute(update(AuthSession).where(AuthSession.user_id == user.id,
+        AuthSession.revoked_at.is_(None)).values(revoked_at=now))
+    await session.execute(update(PasswordResetToken).where(PasswordResetToken.user_id == user.id,
+        PasswordResetToken.used_at.is_(None)).values(used_at=now))
+    tenant = await session.get(Tenant, principal.tenant_id) if principal.tenant_id else None
+    raw, csrf, _ = await create_session(session, user, tenant,
+        request.headers.get("user-agent", ""), principal.session_context)
+    from backend.onboarding import identity_audit
+    session.add(identity_audit(request, user, principal.tenant_id, "password.changed", user.id))
+    await session.commit()
+    _set_auth_cookies(response, raw, csrf)
+    return {"data": {"changed": True}}

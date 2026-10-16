@@ -3,7 +3,6 @@
 import argparse
 import asyncio
 import json
-import os
 import sys
 import time
 from datetime import UTC, datetime
@@ -217,9 +216,6 @@ def main():
         return asyncio.run(run(args))
     if not args.runs:
         parser.error("runs is required for scoring")
-    # Explicit tokenizer data, no network downloads in the evaluator.
-    if "NLTK_DATA" not in os.environ:
-        os.environ["NLTK_DATA"] = str(Path("data/evaluations/nltk_data").resolve())
     report = score_run(args.corpus, json.loads(args.runs.read_bytes()),
                        input_price=args.input_per_million, output_price=args.output_per_million,
                        currency=args.currency)

@@ -217,7 +217,7 @@ async def issue_verification(session: AsyncSession, email: str, user_id: str | N
     url = f"{get_settings().frontend_base_url}/verify-email?token={quote(raw)}"
     await send_account_link(email, "email_verification", url, session=session)
     await commit_identity(session)
-    return {"sent": True, **({"verification_url": url} if get_settings().mail_debug else {})}
+    return {"sent": True}
 
 
 @router.post("/api/auth/register")

@@ -144,6 +144,9 @@ async def recovery(context: dict, *, redis_url: str, worker_name: str) -> dict:
                             ("smtp_connection", services.smtp_connection), ("object_storage", services.storage),
                             ("worker_canary", services.worker)):
             report[name] = await services.capture(check)
+        # Persist sanitized per-service results before asserting; the outer error
+        # report deliberately omits arbitrary exception text and credentials.
+        (OUTPUT / "real-service-probes.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         assert all(item["status"] == "passed" for item in report.values()), "REAL_SERVICE_CHECK_FAILED"
         print("Real queue, SMTP, object storage and trace probes passed; verifying restore", flush=True)
         # Exercise privilege inheritance guard on this disposable PostgreSQL role.
@@ -205,7 +208,11 @@ def main():
         def launch(service, image, *arguments):
             name = prefix + "-" + service
             docker("run", "-d", "--name", name, "--network", network, *arguments, image,
-                   *({"redis": ["redis-server"], "minio": ["server", "/data"]}.get(service, [])))
+                   *({"redis": ["redis-server"], "minio": ["server", "/data"],
+                      # This isolated sink needs no client reverse-DNS lookup;
+                      # Windows/Docker gateway PTR resolution may stall SMTP's
+                      # greeting before the bounded connection probe can run.
+                      "mail": ["--smtp-disable-rdns"]}.get(service, [])))
             names.append(name)
             return name
         postgres = launch("postgres", "pgvector/pgvector:pg16", "-p", "127.0.0.1::5432",

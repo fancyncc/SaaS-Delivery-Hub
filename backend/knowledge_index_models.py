@@ -1,5 +1,5 @@
 """Shared knowledge index for inspection, chat, and Agent retrieval."""
-from sqlalchemy import JSON, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Float, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from backend.models import Base, uid
@@ -21,6 +21,7 @@ class IndexedDocument(Base):
     digest: Mapped[str]=mapped_column(String(64))
     identity: Mapped[str]=mapped_column(String(200),default='')
     attempts: Mapped[int]=mapped_column(Integer,default=0)
+    next_attempt: Mapped[float]=mapped_column(Float,default=0)
     metrics: Mapped[dict]=mapped_column(JSON,default=dict)
 
 

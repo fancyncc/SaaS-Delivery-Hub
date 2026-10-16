@@ -1,0 +1,30 @@
+[
+  {
+    "question": "售后工单的属性有哪些",
+    "status": "evidence_found",
+    "final_tokens": 1012,
+    "pending_documents": 0,
+    "evidence_count": 5
+  },
+  {
+    "question": "XL-107 P1 首次响应时限是多少？",
+    "status": "evidence_found",
+    "final_tokens": 573,
+    "pending_documents": 0,
+    "evidence_count": 3
+  },
+  {
+    "question": "如何烤制草莓蛋糕？",
+    "status": "insufficient_relevance",
+    "final_tokens": 0,
+    "pending_documents": 0,
+    "evidence_count": 0
+  },
+  {
+    "question": "你好",
+    "status": "not_needed",
+    "final_tokens": 0,
+    "pending_documents": null,
+    "evidence_count": 0
+  }
+]

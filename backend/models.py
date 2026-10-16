@@ -8,6 +8,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -594,12 +595,24 @@ class ProjectTaskReview(Base):
     status: Mapped[str] = mapped_column(String(20), default="pending")
     version: Mapped[int] = mapped_column(Integer, default=1)
     document_ids: Mapped[list] = mapped_column(JSON, default=list)
+    document_snapshot: Mapped[list] = mapped_column(JSON, default=list)
     submission_comment: Mapped[str] = mapped_column(Text, default="")
     decision_comment: Mapped[str] = mapped_column(Text, default="")
     submitted_by: Mapped[str] = mapped_column(ForeignKey("users.id"))
     decided_by: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     decided_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class CleanupOutbox(Base):
+    __tablename__ = "cleanup_outbox"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    tenant_id: Mapped[str] = mapped_column(ForeignKey("customer_tenants.id"), index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt: Mapped[float] = mapped_column(Float, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    error: Mapped[str] = mapped_column(String(120), default="")
 
 
 class MailDelivery(Base):

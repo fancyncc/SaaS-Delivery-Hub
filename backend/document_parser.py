@@ -111,7 +111,7 @@ def parse(filename: str, raw: bytes, *, csv_header: bool = True) -> Parsed:
             body = root.find(ns + "body")
             if body is None:
                 raise ValueError("missing body")
-            headings = []
+            headings: list[tuple[int, str, str]] = []
             if any(
                 e.tag.endswith(("}drawing", "}pict", "}object", "}oMath", "}oMathPara"))
                 for e in root.iter()
@@ -147,7 +147,7 @@ def parse(filename: str, raw: bytes, *, csv_header: bool = True) -> Parsed:
                         )
                         if kind == "list_item":
                             result.warnings.append("列表保留条目及顺序；自动编号样式未展开")
-                        location = {"block": i}
+                        location: dict = {"block": i}
                         if kind == "list_item" and num_id is not None:
                             location["list_scope"] = f"docx:{list_start}:{num_id}"
                         add(
@@ -158,18 +158,18 @@ def parse(filename: str, raw: bytes, *, csv_header: bool = True) -> Parsed:
                             heading=" / ".join(t for _, _, t in headings),
                         )
                 elif e.tag == ns + "tbl":
-                    rows = e.findall(ns + "tr")
+                    xml_rows = e.findall(ns + "tr")
                     cells = [
                         [
                             "\n".join(paragraph_text(p) for p in c.findall(ns + "p"))
                             for c in row.findall(ns + "tc")
                         ]
-                        for row in rows
+                        for row in xml_rows
                     ]
                     if e.find(".//" + ns + "tbl") is not None:
                         result.warnings.append(f"表格块 {i} 含嵌套表格，内层内容未解析")
                     explicit_header = bool(
-                        rows and rows[0].find(f"{ns}trPr/{ns}tblHeader") is not None
+                        xml_rows and xml_rows[0].find(f"{ns}trPr/{ns}tblHeader") is not None
                     )
                     headers = cells[0] if explicit_header else []
                     if not explicit_header:
@@ -268,7 +268,7 @@ def parse(filename: str, raw: bytes, *, csv_header: bool = True) -> Parsed:
                 tokens = MarkdownIt("commonmark").enable("table").parse(text)
                 lines = text.splitlines(keepends=True)
                 headings = []
-                occupied = set()
+                occupied: set[int] = set()
                 list_scopes = []
                 for i, t in enumerate(tokens):
                     if t.type in {"bullet_list_open", "ordered_list_open"}:

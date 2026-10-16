@@ -281,3 +281,9 @@ SaaS 实施平台 面向所有用户开放现有 SaaS 实施服务。个人可�
 - `POST /api/knowledge`、`POST /api/knowledge/files`：携带 `project_id` 提交项目文档；不携带时仍要求公司管理员。
 
 所有写请求均沿用现有会话和 CSRF 校验；创建和更新会写入审计日志。
+# 0034 安全契约变更
+
+- `POST /api/auth/password/forgot` 与邮箱验证发送接口不返回凭证或预览链接。开发验证改从受限的本地发件箱或 Mailpit 获取邮件。
+- `GET /api/auth/me` 增加 `must_change_password`。该值为真时，业务接口返回 `403`，`detail.code=password_change_required`；只允许本人信息、退出和 `POST /api/auth/password/change`。改密提交 `{current_password,password}`，成功后设置新会话 Cookie；客户端须重新读取 CSRF Cookie。重置密码及主动改密都会撤销全部旧会话和旧重置链接。
+- 上传任务文档会增加任务 `version`；发起审批前重新读取任务，并等待文档完成解析。审批返回 `latest_review.documents`，包含提交时的版本、原文和 SHA-256。服务端审批通过前会复核快照；旧记录无快照或原文已变化时返回 `409`，须驳回后重新提交。
+- 检索、聊天与 MCP 检索共享用户/租户/全局并发配额；上传与重建也受配额限制。`429` 带 `Retry-After`，正式环境配额服务不可用返回 `503`。聊天引用保留文档、版本、章节、位置及分片元数据。

@@ -29,7 +29,7 @@ DEFINITION = (
 )
 NODES = [node.name for node in DEFINITION]
 APPROVAL_NODES = {node.name: node.approval for node in DEFINITION if node.approval}
-STAGES = {}
+STAGES: dict[str, list[str]] = {}
 for node in DEFINITION:
     if not node.approval:
         STAGES.setdefault(node.stage, []).append(node.name)

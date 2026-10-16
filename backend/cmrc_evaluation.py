@@ -10,6 +10,7 @@ import random
 import re
 from pathlib import Path
 
+from backend.benchmark_tokenizer import tokenizer_metadata, word_tokenize
 from backend.evaluation_artifacts import canonical, digest, read_rows, write_once
 
 REVISION = "c0eb1b6ba219847457e6af3180da722bbeb656af"
@@ -27,21 +28,19 @@ def remove_punctuation(value):
 
 
 def mixed_segmentation(value):
-    import nltk
-
     tokens, pending = [], ""
     for char in str(value).lower().strip():
         if char in PUNCTUATION:
             continue
         if re.search(r"[\u4e00-\u9fa5]", char):
             if pending:
-                tokens.extend(nltk.word_tokenize(pending))
+                tokens.extend(word_tokenize(pending))
                 pending = ""
             tokens.append(char)
         else:
             pending += char
     if pending:
-        tokens.extend(nltk.word_tokenize(pending))
+        tokens.extend(word_tokenize(pending))
     return tokens
 
 
@@ -251,8 +250,6 @@ def score_run(corpus, report, *, input_price=None, output_price=None, currency=N
                          and math.isfinite(r[phase]) and r[phase] >= 0]
                  for phase in ("retrieval_ms", "generation_ms", "latency_ms")}
     valid_evidence = len(evidence_rows)
-    import importlib.metadata
-
     return {
         "schema": 1, "scope": "public_cmrc2018_benchmark", "run_id": report["run_id"],
         "status": report["status"], "complete": (report.get("complete") is True and len(rows) == total
@@ -276,7 +273,8 @@ def score_run(corpus, report, *, input_price=None, output_price=None, currency=N
                  "status": "measured_usage_priced" if cost is not None else "not_measured"},
         "test_data_cleaned": report.get("test_data_cleaned"), "errors": report.get("errors", []),
         "scoring": {"answer": "CMRC v6 EM / longest contiguous mixed-token F1; best official reference",
-                    "nltk_version": importlib.metadata.version("nltk"),
+                    "nltk_version": None,
+                    "tokenizer": tokenizer_metadata(),
                     "evidence": "annotated answer position contained in source-aligned rerank top K / selected body",
                     "prediction": "short answer with numeric citation markers removed; no reference-guided extraction",
                     "denominator": "all frozen questions, including failures; evidence excludes invalid official offsets"},

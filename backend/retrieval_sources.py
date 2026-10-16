@@ -3,6 +3,7 @@ import asyncio
 import hashlib
 import json
 import re
+import time
 from uuid import uuid4
 
 from fastapi import HTTPException
@@ -152,15 +153,15 @@ async def current(session, source):
 
 async def authorized_sources(session, tenant_id, *, project_ids=(), user_id=None,
                              conversation_id=None, artifact_project_ids=()):
-    scopes = [and_(RetrievalSource.kind == "knowledge", or_(RetrievalSource.project_id.is_(None),
+    scopes = [and_(RetrievalSource.kind == "knowledge", or_((RetrievalSource.tenant_id == tenant_id) & RetrievalSource.project_id.is_(None),
                RetrievalSource.project_id.in_(project_ids))),
               and_(RetrievalSource.kind == "project", RetrievalSource.project_id.in_(project_ids)),
               and_(RetrievalSource.kind == "artifact", RetrievalSource.project_id.in_(artifact_project_ids))]
     if user_id and conversation_id:
-        scopes.append(and_(RetrievalSource.kind == "conversation", RetrievalSource.owner_id == user_id,
+        scopes.append(and_(RetrievalSource.tenant_id == tenant_id, RetrievalSource.kind == "conversation", RetrievalSource.owner_id == user_id,
             RetrievalSource.conversation_id == conversation_id,
             or_(RetrievalSource.project_id.is_(None), RetrievalSource.project_id.in_(project_ids))))
-    rows = (await session.scalars(select(RetrievalSource).where(RetrievalSource.tenant_id == tenant_id,
+    rows = (await session.scalars(select(RetrievalSource).where(
         RetrievalSource.active.is_(True), or_(*scopes)))).all()
     return [source for source in rows if await current(session, source)]
 
@@ -231,7 +232,8 @@ async def process_sources(session, tenant_id, limit=10):
             source.chunks_done, source.chunks_total = 0, 0
         source.updated_at = utcnow()
     rows = (await session.scalars(select(RetrievalSource).where(RetrievalSource.tenant_id == tenant_id,
-        RetrievalSource.phase.in_(["pending", "failed"]), RetrievalSource.attempts < 3)
+        RetrievalSource.phase.in_(["pending", "failed"]), RetrievalSource.attempts < 3,
+        RetrievalSource.next_attempt <= time.time())
         .order_by(RetrievalSource.updated_at).limit(limit).with_for_update(skip_locked=True))).all()
     for source in rows:
         try:
@@ -242,6 +244,7 @@ async def process_sources(session, tenant_id, limit=10):
             await session.refresh(source)
             source.attempts += 1
             source.phase = "failed"
+            source.next_attempt = time.time() + min(3600, 30 * 2 ** source.attempts)
             source.error_code = "MODEL_BUSY" if isinstance(exc, HTTPException) and isinstance(exc.detail, dict) and exc.detail.get("code") == "MODEL_BUSY" else "INDEX_DEPENDENCY_FAILED"
             if isinstance(exc, HTTPException) and exc.status_code in {413, 415, 422}:
                 source.attempts = 3
@@ -267,14 +270,14 @@ async def retrieve(session, tenant_id, query, limit=5, *, knowledge_only=False,
              and source.index_identity == index_identity() and source.indexed_generation == source.generation}
     if not ready:
         return []
-    base = select(RetrievalChunk).join(RetrievalSource).where(RetrievalChunk.tenant_id == tenant_id,
+    base = select(RetrievalChunk).join(RetrievalSource).where(RetrievalChunk.tenant_id == RetrievalSource.tenant_id,
         RetrievalChunk.source_id.in_(ready), RetrievalChunk.generation == RetrievalSource.generation)
     expanded = expand_query(query)
     rows, rankings = {}, []
     if s.rag_mode == "real":
         if session.bind.dialect.name != "postgresql":
             raise HTTPException(503, "真实检索需要 PostgreSQL/pgvector")
-        identifiers = await search(tenant_id, list(ready), lexemes(expanded))
+        identifiers = await search(sorted({source.tenant_id for source in ready.values()}), list(ready), lexemes(expanded))
         lexical = (await session.scalars(base.where(RetrievalChunk.id.in_(identifiers)))).all()
         rows.update({chunk.id: chunk for chunk in lexical})
         rankings.append([identifier for identifier in identifiers if identifier in rows])

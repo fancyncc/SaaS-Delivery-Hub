@@ -1,0 +1,8 @@
+# Optional local tooling access; never expose database/cache ports on all interfaces.
+services:
+  api:
+    ports: ["127.0.0.1:8000:8000"]
+  postgres:
+    ports: ["127.0.0.1:5433:5432"]
+  redis:
+    ports: ["127.0.0.1:6379:6379"]

@@ -280,6 +280,11 @@ class PasswordForgotRequest(BaseModel):
     email: str = Field(min_length=5, max_length=160)
 
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    password: str = Field(min_length=10, max_length=128)
+
+
 class PasswordResetRequest(BaseModel):
     token: str = Field(min_length=20, max_length=200)
     password: str = Field(min_length=10, max_length=128)

@@ -20,7 +20,7 @@ def main():
     manifest = json.loads((OUTPUT / 'manifest.json').read_text(encoding='utf-8'))
     credentials = json.loads((ROOT / 'data/demo_workspace/credentials.json').read_text(encoding='utf-8'))
     results = []
-    with httpx.Client(base_url='http://127.0.0.1:8000', trust_env=False, timeout=120) as client:
+    with httpx.Client(base_url='http://127.0.0.1:8080', trust_env=False, timeout=120) as client:
         def call(path, payload=None):
             r = client.post(path, json=payload, headers={'X-CSRF-Token': client.cookies.get('saas_csrf', ''), 'Idempotency-Key': str(uuid4())})
             if r.status_code != 200:

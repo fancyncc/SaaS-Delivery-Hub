@@ -1,0 +1,32 @@
+{
+  "checks": [
+    {
+      "question": "这个平台有哪些功能，各自从哪里进入？",
+      "expected_kind": "platform_manual",
+      "mode": "llm",
+      "citation_kinds": [
+        "platform_manual"
+      ],
+      "steps": [
+        {
+          "stage": "plan",
+          "action": "keep",
+          "query": "这个平台有哪些功能，各自从哪里进入？"
+        },
+        {
+          "stage": "tool",
+          "round": 1,
+          "tool": "search_authorized_context",
+          "summary": "第 1 轮工具调用完成"
+        },
+        {
+          "stage": "observe",
+          "source_count": 6,
+          "retrieval": "hybrid"
+        }
+      ],
+      "passed": true
+    }
+  ],
+  "production_acceptance": false
+}

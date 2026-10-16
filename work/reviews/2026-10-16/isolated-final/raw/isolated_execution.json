@@ -1,0 +1,53 @@
+{
+  "production_acceptance": false,
+  "real_services": {
+    "database_runtime": {
+      "status": "passed",
+      "schema_revision": "0034_security_remediation",
+      "runtime_role": {
+        "status": "passed",
+        "protected_tables": 22
+      }
+    },
+    "redis": {
+      "status": "passed"
+    },
+    "smtp_connection": {
+      "status": "passed",
+      "scope": "connection_authentication_only",
+      "email_delivery_verified": false
+    },
+    "object_storage": {
+      "status": "passed",
+      "scope": "temporary_object_roundtrip"
+    },
+    "worker_canary": {
+      "status": "passed",
+      "scope": "real_queue_consumption_only",
+      "crash_recovery_verified": false
+    }
+  },
+  "worker_sigkill_recovery": "passed",
+  "worker_recovery": {
+    "status": "passed",
+    "steps": 11,
+    "actions": 5
+  },
+  "inherited_privilege_guard": "passed",
+  "isolated_smtp_receipt": "passed",
+  "api_worker_trace_storage": "passed",
+  "database_restore": {
+    "database_business_verified": true,
+    "mismatches": [],
+    "object_storage_verified": true,
+    "rpo_rto_verified": false,
+    "production_acceptance": false
+  },
+  "database_restore_seconds": 2.875,
+  "restore_timezone_normalization": "passed",
+  "scope": "synthetic_isolated_data",
+  "real_generation_quality_verified": false,
+  "real_retrieval_quality_verified": false,
+  "smtp_external_delivery_verified": false,
+  "restored_artifact_count": 2
+}

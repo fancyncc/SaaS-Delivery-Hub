@@ -15,7 +15,11 @@ class QueryPlan(BaseModel):
 
 
 async def plan_query(question, messages, state=None):
-    ambiguous = bool(re.search(r"这个|那个|这些|那些|它|他们|继续|怎么办|怎么弄|不行|有问题", question)) or question.startswith(("那", "还有", "为什么", "如何修复"))
+    # The assistant is explicitly scoped to this platform. A leading "这个平台"
+    # or "这个系统" names that scope; it is not an unresolved pronoun. Keep
+    # detecting any other ambiguous references later in the same question.
+    ambiguity_text = re.sub(r"^这个(?=平台|系统)", "", question)
+    ambiguous = bool(re.search(r"这个|那个|这些|那些|它|他们|继续|怎么办|怎么弄|不行|有问题", ambiguity_text)) or ambiguity_text.startswith(("那", "还有", "为什么", "如何修复"))
     if not ambiguous:
         return QueryPlan(action="keep", query=question, clarification="")
     if get_settings().model_mode != "real":

@@ -25,6 +25,9 @@ function apiErrorMessage(body: any, status: number): string {
     if (typeof detail.message === 'string') return detail.message
     return '提交内容格式不正确，请检查各字段后重试'
   }
+  if (status === 413) return '文件超过上传限制，请拆分文件后重试'
+  if (status === 504) return '处理超时，请检查任务状态后重试'
+  if (status === 429) return '请求过于频繁或处理中任务过多，请稍后重试'
   return `请求失败（${status}）`
 }
 

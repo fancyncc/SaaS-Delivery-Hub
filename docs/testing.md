@@ -25,6 +25,22 @@ pnpm --dir frontend typecheck
 pnpm --dir frontend build
 ```
 
+完整运行浏览器回归时，先构建前端并安装 Playwright Chromium，然后设置
+`RUN_BROWSER_TESTS=1`。需要隔离本机数据库时，用 `SAAS_TEST_DATABASE` 指定新的
+SQLite 文件；不要让两个 pytest 进程使用同一个文件。新增的平台指代回归在
+`tests/test_chat_planning.py`：明确的“这个平台/这个系统”问题直接检索，真正不清楚的
+“它/那个平台”等问法仍可澄清。实际助手验证可执行
+`python scripts/verify_platform_assistant.py --output data/acceptance/live-assistant.json`，
+记录模式、引用类型和步骤；使用演示账号并删除本轮测试对话，不变更用户密码。
+`tests/test_chat_citation_retry.py` 验证模型使用本轮 `evidence-编号` 引用 ID，
+编号与 ID 仍需严格对应；保存和返回时保留真实来源及文档位置。实际验证可按
+`--case runtime` 单独复核运行状态问答；失败原因记录在输出文件，不重写失败记录。
+
+`evaluate_project.py isolated` 的隔离 Mailpit 禁用客户端反向 DNS，避免
+Windows/Docker 网关 PTR 查询使连接探测超时；它不会连接外部收件人。
+失败的逐项状态保存在
+`raw/real-service-probes.json`，不输出凭证或任意异常文本。
+
 可按行为采集独立报告：
 
 ```powershell
@@ -61,7 +77,6 @@ See [CMRC](https://github.com/ymcui/cmrc2018), its
 
 ```powershell
 .venv\Scripts\python.exe -m pip install -e '.[benchmark]'
-.venv\Scripts\python.exe -m nltk.downloader -d data/evaluations/nltk_data punkt_tab
 .venv\Scripts\python.exe scripts/evaluate_cmrc.py prepare --output data/evaluations/cmrc2018-200 --limit 200 --seed 2018
 
 # Start the configured API, PostgreSQL, OpenSearch, and retrieval model services.
@@ -75,10 +90,15 @@ are verified. `--limit 0` selects the full public development split.
 Existing output paths are never overwritten. `-MaxCases 3` runs a smoke check
 against the same prepared corpus; its report explicitly contains only three cases.
 
-On platforms where the NLTK downloader rejects a proxy's DNS address, download
-`punkt_tab.zip` from the official `nltk/nltk_data` repository and place its English
-tokenizer files under `data/evaluations/nltk_data/tokenizers/punkt_tab/english/`.
-No tokenizer resource is downloaded implicitly during scoring.
+CMRC sentence and word tokenization use the bundled inference-only subset of
+NLTK 3.10.3 and the same fixed English Punkt parameters as historical runs.
+The NLTK package and downloader are no longer required. All four plain-text
+parameter files are included in the installation and SHA-256 checked before use;
+`NLTK_DATA` is ignored. Scoring works offline without a separate tokenizer setup.
+Source, model revision and licenses are in `backend/_vendor/cmrc_tokenizer/`.
+Reports retain `scoring.nltk_version` as `null` and identify the implementation,
+reference version and parameter hashes under `scoring.tokenizer`; this does not
+claim that the full NLTK distribution is installed or that it has been patched.
 
 For direct execution in a configured Python environment:
 
@@ -268,3 +288,26 @@ Run with:
   --output evaluations\v3\holdout_v1\first_run.json `
   --budget 1200
 ```
+# 安全回归
+
+## SQLite 迁移与唯一索引
+
+`tests/test_sqlite_migration_integrity.py` 在独立子进程中将 SQLAlchemy `SAWarning` 升级为错误，验证空库升级到 head、带数据回退至 0027、再升级到 head。CI 后端测试同样将 `SAWarning` 作为失败处理。
+
+`test_project_collaboration_migration.py` 和 `test_task_review_migration.py` 验证真实旧表形态的升级、回退和再次升级，逐阶段比较 users 索引原始 SQL，直接执行 INSERT/UPDATE 检查大小写和首尾空格重复值被数据库拒绝，检查原文、任务、状态约束与外键。最终启用 SQLite 外键，确认无效引用实际被拒绝。
+
+子表 batch 反射设置 `resolve_fks=False`，避免递归反射未修改的 users 表；外键定义仍由 Alembic 保留。0015 必须重建 users，因此在 SQLite SAVEPOINT 内保存表达式索引原始 DDL、重建表并恢复索引，包含自定义表达式和部分索引。`test_profile_migration.py` 覆盖空表、有数据、可空联系方式，以及重建表或恢复索引阶段失败时的原子回滚。没有添加忽略告警的过滤器。
+
+```powershell
+.venv\Scripts\python.exe -m pytest tests/test_profile_migration.py tests/test_project_collaboration_migration.py tests/test_task_review_migration.py tests/test_sqlite_migration_integrity.py -q -W error -o cache_dir=tmp/pytest-migration
+```
+
+0015 原有的禁止破坏性回退规则继续保留；上述回退验证不会尝试删除仅用户名注册的登录身份。
+
+## 账号与 PostgreSQL 安全检查
+
+`tests/test_security_remediation.py` 检查公开账号接口不泄露凭证、强制改密、重置令牌失效、检索配额、并发租约释放、审批原文快照和启用外键后的清理。`tests/test_security_migration.py` 检查空库升级和 0034 回退再升级。
+
+为独立的本机测试数据库设置 `SECURITY_TEST_POSTGRES_URL` 后执行 `python tests/check_security_postgres.py`。库名必须以 `security_remediation_test` 开头；脚本不会清空已有业务库。它使用非所有者、`NOBYPASSRLS` 账号验证共享项目检索、公司私有资料隔离、撤销协作后失权，以及真实 PostgreSQL 下上传/审批和双重密码重置的并发行为。CI 为这些检查启动独立 PostgreSQL 服务，并执行 mypy、前端审计和运行时 Python 依赖审计。
+
+CMRC 已移除 NLTK 整包依赖，仅保留英文 Punkt/Treebank 分词所需的推理代码与固定参数，保留原分词和 EM/F1 规则。`PYSEC-2026-3740` 实际涉及模型文件接口绕过路径沙箱；原记录称其为下载器告警不准确。相关模型文件读写、训练、pickle、下载及外部数据目录发现接口均未纳入保留代码。已有环境需先更新项目再执行 `python -m pip uninstall -y nltk`；pip 更新依赖不会自动卸载旧包。CI 同时审计服务依赖与 dev/benchmark 依赖，不忽略该告警；分词参数损坏时评分直接失败，不能降级为其他分词算法。

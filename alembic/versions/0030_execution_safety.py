@@ -90,7 +90,7 @@ def downgrade():
     else:
         op.execute("DROP TRIGGER IF EXISTS agent_runs_snapshot_version")
     op.drop_table("run_snapshots")
-    with op.batch_alter_table("workflow_outbox") as batch:
+    with op.batch_alter_table("workflow_outbox", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_column("trace_context")
-    with op.batch_alter_table("agent_runs") as batch:
+    with op.batch_alter_table("agent_runs", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_column("snapshot_version")

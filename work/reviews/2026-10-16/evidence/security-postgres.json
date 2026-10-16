@@ -1,0 +1,7 @@
+{
+  "scope": "disposable_postgres_security",
+  "production_acceptance": false,
+  "status": "passed",
+  "exit_code": 0,
+  "temporary_container_removed": true
+}

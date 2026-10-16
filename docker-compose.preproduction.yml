@@ -19,7 +19,9 @@ services:
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U saas -d saas_preproduction"], interval: 5s, timeout: 3s, retries: 20}
   redis:
     image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run scripts/init_preproduction.py first}
+    command: ["sh", "-c", 'exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes']
     volumes: ["redis:/data"]
   backup:
     image: pgvector/pgvector:pg16

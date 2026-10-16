@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import boto3
+from botocore.config import Config
 from fastapi import HTTPException
 
 from backend.config import get_settings
@@ -10,7 +11,8 @@ from backend.config import get_settings
 
 def client():
     settings = get_settings()
-    return boto3.client("s3", endpoint_url=settings.s3_endpoint, aws_access_key_id=settings.s3_access_key, aws_secret_access_key=settings.s3_secret_key)
+    return boto3.client("s3", endpoint_url=settings.s3_endpoint, aws_access_key_id=settings.s3_access_key, aws_secret_access_key=settings.s3_secret_key,
+                        config=Config(connect_timeout=3, read_timeout=5, retries={"max_attempts": 1}))
 
 
 def key(item) -> str:

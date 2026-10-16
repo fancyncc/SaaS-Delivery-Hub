@@ -17,7 +17,9 @@ PERMISSIONS = ("project.document.submit", "project.task.write")
 def upgrade():
     existing = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("knowledge_documents")}
     if "submitted_by" not in existing:
-        with op.batch_alter_table("knowledge_documents") as batch:
+        # Keep FK definitions without recursively reflecting users and its
+        # SQLite expression indexes; only this table is being rebuilt.
+        with op.batch_alter_table("knowledge_documents", reflect_kwargs={"resolve_fks": False}) as batch:
             batch.add_column(sa.Column("submitted_by", sa.String(36), nullable=True))
             batch.create_foreign_key("fk_knowledge_submitter", "users", ["submitted_by"], ["id"])
     op.create_table("project_tasks",
@@ -68,6 +70,6 @@ def downgrade():
     op.drop_table("project_tasks")
     foreign_keys = {key["name"] for key in sa.inspect(op.get_bind()).get_foreign_keys("knowledge_documents")}
     if "fk_knowledge_submitter" in foreign_keys:
-        with op.batch_alter_table("knowledge_documents") as batch:
+        with op.batch_alter_table("knowledge_documents", reflect_kwargs={"resolve_fks": False}) as batch:
             batch.drop_constraint("fk_knowledge_submitter", type_="foreignkey")
             batch.drop_column("submitted_by")

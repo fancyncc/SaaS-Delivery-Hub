@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from backend.evidence_coverage import bilingual_expansion
 
-PIPELINE_SCHEMA = 6
+PIPELINE_SCHEMA = 7
 
 # Deterministic retrieval-only translations for common cross-language source
 # terminology.  The original question and source text remain unchanged in the
@@ -155,7 +155,7 @@ def explicit_priority_match(question, hit):
 
 def retrieval_question(question):
     # Business users say "attributes" while schemas call them "fields".
-    # Apply the same intent expansion to recall and reranking.
+    # Expand recall only; reranking always uses the original question.
     additions = []
     if re.search(r'属性|字段|\b(?:attributes?|properties|fields?)\b', question, re.I):
         additions.extend(('字段定义', '数据模型', '字段字典'))

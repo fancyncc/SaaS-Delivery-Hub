@@ -1,4 +1,9 @@
 
+import json
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from backend.cmrc_evaluation import (
@@ -131,3 +136,29 @@ def test_scorer_matches_recorded_official_v6_examples():
         ours = answer_scores([reference], prediction)
         assert ours["em"] == em
         assert ours["f1"] == f1
+
+
+def test_score_cli_writes_all_reports_without_nltk(tmp_path):
+    path, cases, manifest = corpus(tmp_path)
+    report = recording(cases, manifest, [{"id": "q1", "outcome": "succeeded", "answer": "北京[1]"}])
+    report["frozen"]["config"] = {"model_name": "recorded-model",
+                                    "identity": {"embedding": "recorded-embedding", "reranker": "recorded-reranker"}}
+    report["frozen_sha256"] = digest(canonical(report["frozen"]))
+    runs, output = tmp_path / "run.json", tmp_path / "score.json"
+    runs.write_bytes(canonical(report))
+    root = Path(__file__).resolve().parents[1]
+    command = [sys.executable, str(root / "scripts/evaluate_cmrc.py"), "score",
+               "--corpus", str(path), "--runs", str(runs), "--output", str(output)]
+    subprocess.run(command, cwd=tmp_path, check=True, capture_output=True, text=True, timeout=30)
+    scored = json.loads(output.read_bytes())
+    assert scored["complete"] is True
+    assert scored["metrics"]["em"] == scored["metrics"]["f1"] == 100
+    assert scored["scoring"]["nltk_version"] is None
+    assert scored["scoring"]["tokenizer"]["reference_nltk_version"] == "3.10.3"
+    assert output.with_suffix(".md").exists()
+    assert json.loads((tmp_path / "score-predictions.json").read_bytes()) == {"q1": "北京"}
+    # An existing report must still be immutable.
+    retry = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True, timeout=30)
+    assert retry.returncode != 0
+    assert "Output exists" in retry.stderr
+    assert json.loads(output.read_bytes()) == scored

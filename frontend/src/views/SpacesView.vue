@@ -4,14 +4,14 @@ import { api, writeHeaders } from '../api'
 import { useAuthStore } from '../auth'
 
 const auth = useAuthStore()
-const name = ref(''), slug = ref(''), error = ref(''), message = ref(''), preview = ref(''), busy = ref(false)
+const name = ref(''), slug = ref(''), error = ref(''), message = ref(''), busy = ref(false)
 const checkedName = ref(''), sameName = ref(false)
 const hasCompany = computed(() => auth.user?.memberships.some(space => space.kind === 'company'))
 async function verify() {
   error.value = ''; busy.value = true
   try {
-    const data = await api<{verification_url?:string}>('/api/auth/email-verification', {method:'POST', headers:writeHeaders()})
-    message.value = '验证邮件已发送。'; preview.value = data.verification_url || ''
+    await api<{sent:boolean}>('/api/auth/email-verification', {method:'POST', headers:writeHeaders()})
+    message.value = '验证邮件已发送。'
   } catch(e:any) { error.value = e.message } finally { busy.value = false }
 }
 async function create() {
@@ -51,7 +51,6 @@ async function switchTo(id:string) {
       <span class="eyebrow">ACCOUNT SECURITY</span><h2>完善联系方式</h2><p>绑定并验证邮箱，用于公司协作和账号通知。</p><div class="space-actions"><router-link class="secondary" to="/app/profile">前往个人主页 →</router-link>
       <button v-if="auth.user?.email" class="secondary" :disabled="busy" @click="verify">重发验证邮件</button>
       </div>
-      <a v-if="preview" :href="preview">开发模式：打开验证链接</a>
     </section>
     <section v-if="!hasCompany" class="panel">
       <h2>创建公司</h2><p>创建后你将成为公司管理员，可以批量导入成员并分配项目权限。</p>

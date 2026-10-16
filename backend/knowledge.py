@@ -144,13 +144,14 @@ async def _retrieve(session, tenant_id: str, query: str, limit: int = 5, *, proj
         return []
     limit = min(max(limit, 1), 5)
     latest = aliased(KnowledgeDocument)
-    valid = [KnowledgeDocument.tenant_id == tenant_id, KnowledgeDocument.active.is_(True),
-        or_(KnowledgeDocument.project_id.is_(None), KnowledgeDocument.project_id.in_(project_ids or [])),
+    valid = [KnowledgeDocument.active.is_(True),
+        or_((KnowledgeDocument.tenant_id == tenant_id) & KnowledgeDocument.project_id.is_(None),
+            KnowledgeDocument.project_id.in_(project_ids or [])),
         KnowledgeDocument.index_status == "ready", KnowledgeDocument.index_version == index_identity(),
-        ~exists(select(latest.id).where(latest.tenant_id == tenant_id,
+        ~exists(select(latest.id).where(latest.tenant_id == KnowledgeDocument.tenant_id,
             latest.index_status.not_like('indexed_%'),
             latest.title == KnowledgeDocument.title, latest.version > KnowledgeDocument.version)),
-        KnowledgePiece.tenant_id == tenant_id, KnowledgePiece.index_version == KnowledgeDocument.index_version]
+        KnowledgePiece.tenant_id == KnowledgeDocument.tenant_id, KnowledgePiece.index_version == KnowledgeDocument.index_version]
     base = select(KnowledgePiece, KnowledgeDocument).join(KnowledgeDocument, KnowledgePiece.document_id == KnowledgeDocument.id).where(*valid)
     rankings: list[list[str]] = []
     rows = {}

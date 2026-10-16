@@ -1,7 +1,7 @@
 """One authorized chat flow; transport controls only answer delivery."""
 from datetime import UTC, datetime
 
-from backend.chat import answer_instructions, answer_question, cited_sources
+from backend.chat import answer_instructions, answer_question, cited_sources, numbered_evidence
 from backend.chat_planning import plan_query
 from backend.config import get_settings
 
@@ -42,7 +42,7 @@ async def reply(session, row, user, payload, api_schema, memo):
             async for delta in stream_text(answer_instructions() +
                     " 本次直接流式输出正文，不输出 JSON 或 citation_ids 字段。引用使用 evidence 顺序编号 [1]。",
                     {"question": question, "context": context, "memory": memo,
-                     "evidence": [dict(source, number=i) for i, source in enumerate(sources, 1)]}):
+                     "evidence": numbered_evidence(sources)}):
                 answer += delta
                 yield "delta", {"text": delta}
             result = {"answer": answer, "citations": cited_sources(answer, sources), "mode": "llm"}

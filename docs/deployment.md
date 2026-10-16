@@ -242,6 +242,10 @@ RAG 查验、聊天及 Agent 的企业和项目知识文档共用 知识检索 �
 
 Docker 使用 `RETRIEVAL_INDEXING_ENABLED=true`，由单实例 beat 调度、indexer 消费索引任务。API 内置索引循环保持关闭。历史文本资料可分批注册；只有提取文本而没有原件的 PDF、PPTX 和 XLSX 必须重新上传。失败资料在详情页显示原因；有权限的项目成员或公司管理员可重新加入队列。模型身份变化后会重建不兼容的向量。
 
+`indexer` 和 `beat` 是默认启动服务，不依赖 `agent` profile，并随 Docker 自动恢复。启用 `rag` profile 时 indexer 等待模型和关键词服务健康后启动。更新后端时需同时构建并更新 API、indexer、beat，避免旧消费者使用过时表名或索引身份。文档状态 `indexed_stale` 表示已存索引不兼容，不能显示为可检索；后台会按正常流程分批重建。
+
+查验响应中的 `retrieval_executed` 表示本次是否通过就绪检查并实际执行召回；`index_availability` 仅统计当前授权范围。索引不可用时返回 `unavailable_reason`，区分无文档、处理关闭、失败、过期和等待处理；`diagnostics.timings_ms` 记录实际完成阶段的耗时。查询扩展只用于召回，重排及补充证据均使用原始问题，避免追加的中英文词表改变相关性判断。该行为使用 `pipeline_schema=7`，旧校准报告仍需重新评测。
+
 ### 验证与故障处理
 
 检查 `/api/knowledge/inspect` 的 `pipeline=retrieval`、`chunks` 与 `evidence_text`，再用真实资料核对页码、幻灯片或工作表位置和聊天、Agent 引用。用 `/metrics` 观察 pending、failed、最旧待处理时间与解析耗时。索引故障先修复消费者和原件，再重试失败资料。需要暂停新索引时设置 `RETRIEVAL_INDEXING_ENABLED=false`；校准策略故障可将 `RETRIEVAL_RELEVANCE_MODE` 设回 `rules`，保留已写入的索引数据。
@@ -288,3 +292,14 @@ Docker 使用 `RETRIEVAL_INDEXING_ENABLED=true`，由单实例 beat 调度、ind
 ### 上线顺序
 
 先补不可变快照与运行账号校验，再补外部效果对账和所有检索/模型入口的攻击回归。最后在独立 PostgreSQL/OpenSearch 环境演练崩溃、恢复与索引重建，记录数据一致性、重复副作用和恢复耗时；六项逐项有证据后再验收。
+# 安全修复部署（0034）
+
+更新前运行 `python scripts/init_local_secrets.py`，它只补充私有 Redis 配置，不更改已有账号或数据库密码。基础 Compose 不发布 API、PostgreSQL、Redis 端口；需要本机调试时额外使用 `-f docker-compose.dev.yml`，这些端口仅绑定 `127.0.0.1`。升级须同步重建 API、worker、indexer、beat，先备份并验证恢复，再执行 `alembic upgrade head`。`scripts/deploy_local.ps1` 完成备份、迁移、同步发布和就绪检查。
+
+默认 `MAIL_DEBUG=false`，本地邮件发送到 Mailpit（界面 `http://localhost:8025`）；请在 Compose 中启动 `mailpit`。调试模式也不通过公开接口返回验证码或重置链接，消息进入私有数据库发件箱；仅开发人员可在项目根目录使用 `python -m scripts.dev_mailbox 邮箱` 查看。SMTP 消费者由 beat 调度，indexer 消费索引任务，普通 worker 消费邮件与业务任务。
+
+正式环境设置 `APP_ENV=production`，必须使用 HTTPS、`COOKIE_SECURE=true`、非默认强管理员密码、至少 32 字符的 `JWT_SECRET`、认证 Redis，并关闭邮件调试。启动校验会拒绝不安全组合。默认网页也仅绑定本机；经外部 HTTPS 代理发布时按部署网络设置 `WEB_BIND_ADDRESS`。反向代理应将 `/api/`、`/ready` 转发至 API，限制文件请求为 12 MiB，应用继续执行各格式大小限制。内置 Nginx 等待处理最长 720 秒；聊天上传是受限的同步隔离解析，超时返回失败，可拆分文件后重试。
+
+0034 为审批增加冻结原文和摘要。旧的待审批记录没有可信快照，必须驳回后重新提交才能通过，不能自动补签。初始密码账号只允许查看本人信息、退出和修改密码，成功改密后轮换会话并撤销旧会话及重置链接。
+
+项目物理清理仍要求回收站保留满 30 天，HTTP 与定时任务共用同一实现。数据库删除与 `cleanup_outbox` 同事务提交；OpenSearch/S3 删除失败会指数退避重试。检查队列中长期 `pending` 的记录及错误类型，恢复外部服务后重试；原文访问始终以数据库授权为准。

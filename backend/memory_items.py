@@ -1,12 +1,13 @@
 """Private scoped memory and explicit candidate acceptance. No implicit writes."""
 import re
 import time
-from typing import Literal
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -153,7 +154,7 @@ async def create_item(payload: ItemCreate, user: Principal = Depends(customer), 
             MemoryItem.version == previous.version, MemoryItem.status == "revoked").values(
                 category=payload.category, content=payload.content.strip(), expires_at=payload.expires_at,
                 source={"kind": "user_confirmed"}, status="active", version=previous.version + 1))
-        if changed.rowcount != 1:
+        if cast(CursorResult, changed).rowcount != 1:
             raise HTTPException(409, "记忆已变更，请刷新")
         await commit(session)
         return {"data": view(previous)}
@@ -175,7 +176,7 @@ async def edit_item(identifier: UUID, payload: ItemUpdate, user: Principal = Dep
         raise HTTPException(422, "内容不能为空")
     changed = await session.execute(update(MemoryItem).where(MemoryItem.id == row.id, MemoryItem.version == payload.expected_version)
         .values(content=payload.content.strip(), source={"kind": "user_confirmed"}, expires_at=payload.expires_at, version=payload.expected_version + 1))
-    if changed.rowcount != 1:
+    if cast(CursorResult, changed).rowcount != 1:
         raise HTTPException(409, "记忆已变更，请刷新")
     await commit(session)
     return {"data": view(row)}
@@ -189,7 +190,7 @@ async def delete_item(identifier: UUID, expected_version: int, user: Principal =
         raise HTTPException(409, "旧记忆请通过兼容记忆编辑框清空")
     changed = await session.execute(update(MemoryItem).where(MemoryItem.id == row.id, MemoryItem.version == expected_version)
         .values(status="revoked", version=expected_version + 1))
-    if changed.rowcount != 1:
+    if cast(CursorResult, changed).rowcount != 1:
         raise HTTPException(409, "记忆已变更，请刷新")
     await commit(session)
     return {"data": {"deleted": True}}
@@ -214,7 +215,7 @@ async def update_preferences(payload: PreferenceUpdate, user: Principal = Depend
     if row:
         result = await session.execute(update(MemoryPreference).where(MemoryPreference.id == row.id, MemoryPreference.version == payload.expected_version)
             .values(auto_extract=payload.auto_extract, version=payload.expected_version + 1))
-        if result.rowcount != 1:
+        if cast(CursorResult, result).rowcount != 1:
             raise HTTPException(409, "设置已更新")
     elif payload.expected_version == 0:
         session.add(MemoryPreference(tenant_id=user.tenant_id, user_id=user.user_id, auto_extract=payload.auto_extract))
@@ -317,7 +318,7 @@ async def decide_candidate(identifier: UUID, decision: Literal["accept", "reject
     changed = await session.execute(update(MemoryCandidate).where(MemoryCandidate.id == row.id,
         MemoryCandidate.version == payload.expected_version, MemoryCandidate.status == "pending")
         .values(status="accepted" if decision == "accept" else "rejected", version=payload.expected_version + 1))
-    if changed.rowcount != 1:
+    if cast(CursorResult, changed).rowcount != 1:
         raise HTTPException(409, "候选已处理，请刷新")
     if decision == "accept":
         existing = await session.scalar(select(MemoryItem).where(visible(user), MemoryItem.scope == "workspace",
@@ -329,7 +330,7 @@ async def decide_candidate(identifier: UUID, decision: Literal["accept", "reject
             result = await session.execute(update(MemoryItem).where(MemoryItem.id == existing.id, MemoryItem.version == existing.version)
                 .values(content=row.content, source=source_info, status="active", expires_at=None,
                     version=existing.version + 1))
-            if result.rowcount != 1:
+            if cast(CursorResult, result).rowcount != 1:
                 raise HTTPException(409, "记忆已更新")
             row.memory_item_id = existing.id
         else:

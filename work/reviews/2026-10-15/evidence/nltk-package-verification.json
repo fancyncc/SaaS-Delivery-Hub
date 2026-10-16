@@ -1,0 +1,29 @@
+{
+  "nltk_installed": false,
+  "zip_resource_load": true,
+  "metrics": {
+    "em": 70.5,
+    "f1": 87.62201353576889,
+    "evidence_eligible_questions": 200,
+    "evidence_excluded_invalid_positions": 0,
+    "answer_evidence_hit_at_k": {
+      "1": 0.975,
+      "3": 1.0,
+      "5": 1.0
+    },
+    "selected_answer_evidence_hit_rate": 0.98
+  },
+  "wheel_sha256": "63c3bb2cd900a77403fde75fc8197e0def4984f7f0c0588334b85e173ad782ea",
+  "bundled_resources": [
+    "manifest.json",
+    "LICENSE.txt",
+    "NOTICE.md",
+    "PUNKT_README.txt",
+    "abbrev_types.txt",
+    "collocations.tab",
+    "ortho_context.tab",
+    "sent_starters.txt"
+  ],
+  "reference_wheel_sha256": "ff9598a8e20518ee0d557745890cc4435b9578489e2dcbc69c4f81fa060caf7c",
+  "reference_source_verified": true
+}

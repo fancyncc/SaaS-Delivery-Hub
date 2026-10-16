@@ -1,0 +1,18 @@
+{
+  "checks": [
+    {
+      "question": "这个平台有哪些功能，各自从哪里进入？",
+      "expected_kind": "platform_manual",
+      "mode": "clarification",
+      "citation_kinds": [],
+      "steps": [
+        {
+          "stage": "plan",
+          "action": "clarify",
+          "query": "这个平台有哪些功能，各自从哪里进入？"
+        }
+      ]
+    }
+  ],
+  "production_acceptance": false
+}

@@ -59,7 +59,12 @@ _VALUE_PATTERNS = {
     "region": (r"\b(?:us|eu|ap|cn)-[a-z]+-\d+\b", r"(?:华东|华北|华南|亚太|欧洲|北美)\s*\d*"),
     "format": (r"\b(?:sha-?\d+|md5|crc\d*|json|yaml|csv|parquet)\b",),
     "deadline": (r"\b\d+(?:\.\d+)?\s*(?:minutes?|hours?|days?|business days?)\b", r"\d+(?:\.\d+)?\s*(?:分钟|小时|天|工作日)"),
-    "condition": (r"(?:同时满足|仅当|只有.+才|必须.+(?:后|前)|\b(?:only if|provided that|must.+before|must.+after)\b)",),
+    "condition": (
+        r"(?:同时满足|仅当|只有.+才|必须.+(?:后|前)|\b(?:only if|provided that|must.+before|must.+after)\b)",
+        # A source may state triggering conditions without using the noun
+        # 'condition'. Keep this a source-side cue, not extra query keywords.
+        r"(?:触发|\btriggers?\b)",
+    ),
 }
 _QUESTION_STOPWORDS = {
     "a", "an", "and", "are", "be", "before", "can", "does", "for", "how", "in", "is",

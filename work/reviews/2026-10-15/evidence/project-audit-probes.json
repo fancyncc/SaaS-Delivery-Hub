@@ -1,0 +1,59 @@
+[
+  {
+    "probe": "anonymous_password_takeover",
+    "reset_url_exposed": true,
+    "reset_status": 200,
+    "login_status": 200
+  },
+  {
+    "probe": "older_reset_token_survives_newer_password_reset",
+    "status": 200
+  },
+  {
+    "probe": "forced_password_change_not_enforced",
+    "login_status": 200,
+    "must_change": true,
+    "sensitive_endpoint_status": 200
+  },
+  {
+    "probe": "inspection_has_no_user_rate_limit",
+    "requests": 40,
+    "successful": 40,
+    "rate_limited": 0
+  },
+  {
+    "probe": "collaborator_can_read_but_cannot_retrieve",
+    "readable": true,
+    "retrieval_documents": 0
+  },
+  {
+    "probe": "chat_citation_provenance_lost",
+    "remaining_fields": [
+      "id",
+      "kind",
+      "source",
+      "text",
+      "title"
+    ],
+    "page_preserved": false,
+    "document_id_preserved": false
+  },
+  {
+    "probe": "task_document_freeze_race",
+    "submitted_status": "pending_review",
+    "frozen_document_count": 1,
+    "linked_document_count": 2,
+    "late_upload_succeeded": true
+  },
+  {
+    "probe": "project_cleanup_with_knowledge",
+    "exception": "IntegrityError",
+    "foreign_key_failure": true
+  },
+  {
+    "probe": "nginx_upload_limit",
+    "small_status": 403,
+    "over_1_mib_status": 413,
+    "over_1_mib_is_proxy_html": true
+  }
+]

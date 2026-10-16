@@ -21,6 +21,7 @@ from backend.models import (
     User,
     UserInvitation,
 )
+from tests.mail_helpers import mail_link
 
 
 def headers(client):
@@ -38,7 +39,7 @@ def anonymous():
 async def register(client, email="personal@example.com"):
     sent = await client.post("/api/auth/register", json={"email": email})
     assert sent.status_code == 200, sent.text
-    raw = token(sent.json()["data"]["verification_url"])
+    raw = token(await mail_link("email_verification"))
     verified = await client.post("/api/auth/verify-email", json={"token": raw, "display_name": "个人用户", "password": "PersonalPass123"})
     assert verified.status_code == 200, verified.text
     return (await client.get("/api/auth/me")).json()["data"]
@@ -88,7 +89,8 @@ async def test_legacy_email_verification_required(client):
     assert me["company_creation_requires_verified_email"]
     assert (await client.post("/api/companies", headers=headers(client), json={"name": "公司名称", "slug": "legacy-new"})).status_code == 403
     sent = await client.post("/api/auth/email-verification", headers=headers(client))
-    raw = token(sent.json()["data"]["verification_url"])
+    assert sent.status_code == 200 and "verification_url" not in sent.json()["data"]
+    raw = token(await mail_link("email_verification"))
     async with anonymous() as stranger:
         assert (await stranger.post("/api/auth/verify-email", json={"token": raw})).status_code == 401
     assert (await client.post("/api/auth/verify-email", json={"token": raw})).status_code == 200
@@ -99,16 +101,17 @@ async def test_legacy_email_verification_required(client):
 async def test_expired_and_concurrent_registration():
     async with anonymous() as first, anonymous() as second:
         sent = await first.post("/api/auth/register", json={"email": "race@example.com"})
-        raw = token(sent.json()["data"]["verification_url"])
+        assert sent.status_code == 200 and "verification_url" not in sent.json()["data"]
+        raw = token(await mail_link("email_verification"))
         payload = {"token": raw, "display_name": "并发用户", "password": "RacePassword123"}
         responses = await asyncio.gather(first.post("/api/auth/verify-email", json=payload), second.post("/api/auth/verify-email", json=payload))
         assert sorted(r.status_code for r in responses) == [200, 410]
-        sent = await first.post("/api/auth/register", json={"email": "expired@example.com"})
+        await first.post("/api/auth/register", json={"email": "expired@example.com"})
         async with SessionLocal() as session:
             item = await session.scalar(select(EmailVerification).where(EmailVerification.email == "expired@example.com"))
             item.expires_at = datetime.now(UTC) - timedelta(seconds=1)
             await session.commit()
-        assert (await second.post("/api/auth/verify-email", json={**payload, "token": token(sent.json()["data"]["verification_url"])})).status_code == 410
+        assert (await second.post("/api/auth/verify-email", json={**payload, "token": token(await mail_link("email_verification"))})).status_code == 410
 
 
 async def test_registration_rejects_non_string_email():

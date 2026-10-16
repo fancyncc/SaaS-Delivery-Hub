@@ -1,0 +1,158 @@
+{
+  "status": 422,
+  "detail": "模型引用编号与来源不一致，请重试",
+  "attempts": [
+    {
+      "source_count": 9,
+      "source_id_numbers": {
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:4": [
+          1
+        ],
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:3": [
+          2
+        ],
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:0": [
+          3
+        ],
+        "aa68f881-ffb5-437d-8fba-3e45de7d595d:1": [
+          4
+        ],
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:1": [
+          5
+        ],
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:14:0": [
+          6
+        ],
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:8:0": [
+          7
+        ],
+        "platform:imports:330665950d4f": [
+          8
+        ],
+        "runtime:a45c8104ec1139fc": [
+          9
+        ]
+      },
+      "source_kinds": [
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "platform_manual",
+        "runtime"
+      ],
+      "cited_numbers": [
+        3,
+        6,
+        9
+      ],
+      "provided_ids_known": [
+        true,
+        true,
+        true
+      ],
+      "provided_ids_are_kinds": [
+        false,
+        false,
+        false
+      ],
+      "expected_numbers_from_ids": [
+        2,
+        6,
+        9
+      ],
+      "provided_ids": [
+        "runtime:a45c8104ec1139fc",
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:3",
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:14:0"
+      ]
+    },
+    {
+      "source_count": 9,
+      "source_id_numbers": {
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:4": [
+          1
+        ],
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:3": [
+          2
+        ],
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:0": [
+          3
+        ],
+        "aa68f881-ffb5-437d-8fba-3e45de7d595d:1": [
+          4
+        ],
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:1": [
+          5
+        ],
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:14:0": [
+          6
+        ],
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:8:0": [
+          7
+        ],
+        "platform:imports:330665950d4f": [
+          8
+        ],
+        "runtime:a45c8104ec1139fc": [
+          9
+        ]
+      },
+      "source_kinds": [
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "platform_manual",
+        "runtime"
+      ],
+      "cited_numbers": [
+        1,
+        3,
+        6,
+        7,
+        8,
+        9
+      ],
+      "provided_ids_known": [
+        true,
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "provided_ids_are_kinds": [
+        false,
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "expected_numbers_from_ids": [
+        1,
+        2,
+        6,
+        7,
+        8,
+        9
+      ],
+      "provided_ids": [
+        "runtime:a45c8104ec1139fc",
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:4",
+        "677de6d5-3f40-40ad-8a46-13b24c55ddbd:3",
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:14:0",
+        "8bad9207-bb2b-464c-ae8f-687fcf036f9c:8:0",
+        "platform:imports:330665950d4f"
+      ]
+    }
+  ],
+  "test_conversation_deleted": true
+}

@@ -1,5 +1,6 @@
 services:
   api:
+    restart: unless-stopped
     build: &backend_build
       context: .
       args:
@@ -10,14 +11,23 @@ services:
       DATABASE_URL: postgresql+psycopg://${APP_DB_USER:-saas_app}:${SAAS_APP_DB_PASSWORD:-saas_app}@postgres:5432/${POSTGRES_DB:-saas_agent}
       APP_DB_USER: ${APP_DB_USER:-saas_app}
       APP_DB_PASSWORD: ${SAAS_APP_DB_PASSWORD:-saas_app}
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: redis://:${REDIS_PASSWORD:?Run python scripts/init_local_secrets.py}@redis:6379/0
       AUTO_CREATE_SCHEMA: "false"
-      COOKIE_SECURE: "false"
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      APP_ENV: ${APP_ENV:-development}
+      JWT_SECRET: ${JWT_SECRET:-development-only-secret-change-me-32-bytes}
+      MAIL_DEBUG: ${MAIL_DEBUG:-false}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      SMTP_FROM: ${SMTP_FROM:-implementation@example.test}
       DEMO_MODE: "false"
       REQUIRE_VERIFIED_EMAIL_FOR_COMPANY: ${REQUIRE_VERIFIED_EMAIL_FOR_COMPANY:-false}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-admin@example.com}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-ChangeMe123!}
-      FRONTEND_BASE_URL: http://localhost:8080
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:8080}
       SKILL_RUNTIME_ENABLED: ${SKILL_RUNTIME_ENABLED:-false}
       SKILL_MAX_TOKENS: ${SKILL_MAX_TOKENS:-8000}
       OFFICIAL_WEB_ENABLED: ${OFFICIAL_WEB_ENABLED:-false}
@@ -75,9 +85,10 @@ services:
       RERANKER_MODEL: ${RERANKER_MODEL:-BAAI/bge-reranker-base}
       RERANKER_REVISION: 2cfc18c9415c912f9d8155881c133215df768a70
       EXECUTION_MODE: ${EXECUTION_MODE:-inline}
-    ports: ["8000:8000"]
     depends_on:
       migrate: {condition: service_completed_successfully}
+      redis: {condition: service_healthy}
+      mailpit: {condition: service_started}
     healthcheck: {test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"], interval: 10s, timeout: 5s, retries: 5}
   migrate:
     build: *backend_build
@@ -97,7 +108,7 @@ services:
       api: {condition: service_healthy}
       redis: {condition: service_started}
   indexer:
-    profiles: ["agent"]
+    restart: unless-stopped
     build: *backend_build
     environment:
       <<: *api_environment
@@ -105,8 +116,10 @@ services:
     depends_on:
       api: {condition: service_healthy}
       redis: {condition: service_started}
+      retrieval: {condition: service_healthy, required: false}
+      opensearch: {condition: service_healthy, required: false}
   beat:
-    profiles: ["agent"]
+    restart: unless-stopped
     build: *backend_build
     environment:
       <<: *api_environment
@@ -143,10 +156,12 @@ services:
     volumes: ["search_data:/usr/share/opensearch/data"]
     healthcheck: {test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null"], interval: 15s, timeout: 5s, retries: 20}
   web:
+    restart: unless-stopped
     build: ./frontend
-    ports: ["8080:80"]
+    ports: ["${WEB_BIND_ADDRESS:-127.0.0.1}:8080:80"]
     depends_on: [api]
   postgres:
+    restart: unless-stopped
     image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-saas}
@@ -155,17 +170,24 @@ services:
       APP_DB_USER: ${APP_DB_USER:-saas_app}
       APP_DB_PASSWORD: ${SAAS_APP_DB_PASSWORD:-saas_app}
     volumes: ["postgres_data:/var/lib/postgresql/data"]
-    # Use 5433 on the host to avoid clashing with an existing local PostgreSQL.
-    ports: ["5433:5432"]
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"], interval: 5s, timeout: 3s, retries: 10}
   redis:
+    restart: unless-stopped
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Run python scripts/init_local_secrets.py}
+    command: ["sh", "-c", 'exec redis-server --requirepass "$$REDIS_PASSWORD" --appendonly yes']
+    volumes: ["redis_data:/data"]
+    healthcheck: {test: ["CMD-SHELL", 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG'], interval: 5s, timeout: 3s, retries: 10}
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: ["127.0.0.1:8025:8025"]
   prometheus:
     image: prom/prometheus:v3.1.0
-    volumes: ["./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro", "./scripts/alerts.yml:/etc/prometheus/alerts.yml:ro"]
-    ports: ["9090:9090"]
+    volumes: ["./scripts/prometheus.yml:/etc/prometheus/prometheus.yml:ro", "./scripts/alerts.yml:/etc/prometheus/alerts.yml:ro", "prometheus_data:/prometheus"]
+    ports: ["127.0.0.1:9090:9090"]
   grafana:
     image: grafana/grafana:11.4.0
-    ports: ["3000:3000"]
-volumes: {postgres_data: {}, retrieval_models: {}, search_data: {}}
+    volumes: ["grafana_data:/var/lib/grafana"]
+    ports: ["127.0.0.1:3000:3000"]
+volumes: {redis_data: {}, postgres_data: {}, retrieval_models: {}, search_data: {}, grafana_data: {}, prometheus_data: {}}

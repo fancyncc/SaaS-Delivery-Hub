@@ -7,7 +7,7 @@ interface Profile {username:string; display_name:string; email:string|null; emai
 const auth = useAuthStore(), profile = ref<Profile|null>(null)
 const username = ref(''), name = ref(''), phone = ref(''), email = ref('')
 const accountPassword = ref(''), phonePassword = ref(''), emailPassword = ref('')
-const error = ref(''), message = ref(''), preview = ref(''), busy = ref(false)
+const error = ref(''), message = ref(''), busy = ref(false)
 async function load() {
   profile.value = await api<Profile>('/api/auth/profile')
   username.value = profile.value.username; name.value = profile.value.display_name
@@ -25,12 +25,12 @@ async function save(kind:'account'|'phone') {
   } catch(e:any) {error.value=e.message} finally {busy.value=false}
 }
 async function bindEmail() {
-  busy.value=true; error.value=''; message.value=''; preview.value=''
+  busy.value=true; error.value=''; message.value=''
   try {
-    const result = await api<{verification_url?:string; verified?:boolean}>('/api/auth/profile/email', {
+    const result = await api<{sent?:boolean; verified?:boolean}>('/api/auth/profile/email', {
       method:'POST', headers:writeHeaders(), body:JSON.stringify({email:email.value, current_password:emailPassword.value}),
     })
-    emailPassword.value=''; preview.value=result.verification_url || ''
+    emailPassword.value=''
     message.value=result.verified ? '邮箱已验证。' : '验证邮件已发送，请打开邮件中的链接完成绑定。'
   } catch(e:any) {error.value=e.message} finally {busy.value=false}
 }
@@ -66,7 +66,6 @@ async function bindEmail() {
             <label><span>邮箱绑定确认密码</span><input v-model="emailPassword" type="password" required autocomplete="current-password" placeholder="输入当前账号密码"></label>
             <div class="profile-form-footer"><small>验证链接 1 小时内有效，请在当前账号登录后打开。</small><button class="primary" :disabled="busy">发送绑定邮件</button></div>
           </form>
-          <a v-if="preview" class="preview-link" :href="preview">开发模式：打开验证链接 <span aria-hidden="true">↗</span></a>
         </section>
         <section class="panel profile-section">
           <div class="profile-section-heading"><div><span class="section-kicker">03 / MOBILE</span><h2>手机号</h2></div><span class="contact-status">{{profile.phone ? '已填写 · 未验证' : '未填写'}}</span></div>

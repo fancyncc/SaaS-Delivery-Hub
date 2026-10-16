@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { api, writeHeaders } from './api'
 
 export interface CurrentUser {
+  must_change_password: boolean
   id: string; username: string; email: string | null; phone: string | null; phone_verified: boolean; display_name: string; tenant_id: string | null; tenant_name: string | null
   account_type: 'platform' | 'customer'; session_context: 'platform' | 'customer'
   role: 'tenant_admin' | 'tenant_member' | 'platform_admin'; is_platform_admin: boolean

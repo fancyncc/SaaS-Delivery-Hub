@@ -3,7 +3,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         return value
 
     app_name: str = "SaaS 实施平台"
+    app_env: Literal["development", "test", "production"] = "development"
     database_url: str = "sqlite+aiosqlite:///./saas_agent.db"
     migration_database_url: str = ""
     app_db_user: str = "saas_app"
@@ -40,7 +41,7 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str = "ChangeMe123!"
     bootstrap_admin_name: str = "平台管理员"
     legacy_tenant_name: str = "Legacy Demo"
-    mail_debug: bool = True
+    mail_debug: bool = False
     require_verified_email_for_company: bool = True
     frontend_base_url: str = "http://localhost:8080"
     execution_mode: str = "inline"
@@ -120,6 +121,25 @@ class Settings(BaseSettings):
     opensearch_index: str = "saas-rag-v1"
     opensearch_username: str = ""
     opensearch_password: str = ""
+
+    @model_validator(mode="after")
+    def production_security(self):
+        if self.app_env == "production":
+            from urllib.parse import urlsplit
+            invalid = []
+            if self.mail_debug:
+                invalid.append("MAIL_DEBUG must be false")
+            if not self.cookie_secure or not self.frontend_base_url.startswith("https://"):
+                invalid.append("HTTPS and COOKIE_SECURE are required")
+            if self.bootstrap_admin_password == "ChangeMe123!" or len(self.bootstrap_admin_password) < 16:
+                invalid.append("set a strong BOOTSTRAP_ADMIN_PASSWORD")
+            if self.jwt_secret.startswith("development-") or len(self.jwt_secret) < 32:
+                invalid.append("set JWT_SECRET with at least 32 characters")
+            if not urlsplit(self.redis_url).password:
+                invalid.append("authenticated REDIS_URL is required")
+            if invalid:
+                raise ValueError("Unsafe production configuration: " + "; ".join(invalid))
+        return self
 
     skill_runtime_enabled: bool = False
     skill_max_tokens: int = Field(default=8000, ge=100, le=16000)

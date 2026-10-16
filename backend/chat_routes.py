@@ -21,6 +21,7 @@ from backend.db import get_session
 from backend.models import uid
 from backend.platform_knowledge import profile
 from backend.rate_limit import enforce_rate_limit
+from backend.resource_limits import retrieval_budget, upload_budget
 from backend.security import Principal, current_principal
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -227,7 +228,7 @@ async def delete_conversation(identifier: UUID, user: Principal = Depends(custom
     return {"data": {"deleted": True}}
 
 
-@router.post("/conversations/{identifier}/documents")
+@router.post("/conversations/{identifier}/documents", dependencies=[Depends(upload_budget)])
 async def upload(identifier: UUID, file: UploadFile, expected_version: int, user: Principal = Depends(customer), session: AsyncSession = Depends(get_session)):
     row = await owned(session, identifier, user, hydrate_history=False)
     require_unarchived(row)
@@ -235,8 +236,12 @@ async def upload(identifier: UUID, file: UploadFile, expected_version: int, user
         raise HTTPException(422, "每个对话最多上传 10 份文档")
     raw = await file.read(MAX_FILE_BYTES + 1)
     name = (file.filename or "document.txt").replace("\\", "/").split("/")[-1][:160]
+    from backend.document_parse_process import parse_isolated
     from backend.document_parser import parse
-    parsed = await asyncio.to_thread(parse, name, raw)
+    if len(raw) > MAX_FILE_BYTES:
+        raise HTTPException(413, "文件不能超过 2 MiB")
+    parser = parse_isolated if name.lower().endswith((".pdf", ".docx", ".pptx", ".xlsx")) else parse
+    parsed = await asyncio.to_thread(parser, name, raw)
     text = '\n\n'.join((node.context+'\n' if node.context else '')+node.text for node in parsed.nodes if node.text)
     return await save(session, row, expected_version, documents=[*row.documents, {"id": uid(), "name": name, "text": text, 'warnings':parsed.warnings}])
 
@@ -251,7 +256,7 @@ async def delete_document(identifier: UUID, document_id: UUID, expected_version:
     return await save(session, row, expected_version, documents=documents)
 
 
-@router.post("/conversations/{identifier}/messages")
+@router.post("/conversations/{identifier}/messages", dependencies=[Depends(retrieval_budget)])
 async def send(identifier: UUID, payload: MessageCreate, request: Request, user: Principal = Depends(customer), session: AsyncSession = Depends(get_session)):
     row = await owned(session, identifier, user, runtime_history=True)
     for message in row.messages:

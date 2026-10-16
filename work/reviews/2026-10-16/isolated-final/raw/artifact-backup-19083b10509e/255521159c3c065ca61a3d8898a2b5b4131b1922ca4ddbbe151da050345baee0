@@ -1,0 +1,32 @@
+{
+  "milestones": [
+    {
+      "name": "调研与方案",
+      "days": 3,
+      "owner_role": "implementation_consultant",
+      "dependencies": []
+    },
+    {
+      "name": "配置与迁移",
+      "days": 5,
+      "owner_role": "implementation_consultant",
+      "dependencies": [
+        "调研与方案"
+      ]
+    },
+    {
+      "name": "培训与上线",
+      "days": 2,
+      "owner_role": "customer_contact",
+      "dependencies": [
+        "配置与迁移"
+      ]
+    }
+  ],
+  "assumptions": [
+    "客户审批人在两个工作日内反馈"
+  ],
+  "risks": [
+    "源数据质量可能影响迁移"
+  ]
+}

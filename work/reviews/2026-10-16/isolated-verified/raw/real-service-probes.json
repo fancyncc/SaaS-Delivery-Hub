@@ -1,0 +1,27 @@
+{
+  "database_runtime": {
+    "status": "passed",
+    "schema_revision": "0034_security_remediation",
+    "runtime_role": {
+      "status": "passed",
+      "protected_tables": 22
+    }
+  },
+  "redis": {
+    "status": "passed"
+  },
+  "smtp_connection": {
+    "status": "passed",
+    "scope": "connection_authentication_only",
+    "email_delivery_verified": false
+  },
+  "object_storage": {
+    "status": "passed",
+    "scope": "temporary_object_roundtrip"
+  },
+  "worker_canary": {
+    "status": "passed",
+    "scope": "real_queue_consumption_only",
+    "crash_recovery_verified": false
+  }
+}

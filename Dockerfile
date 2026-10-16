@@ -9,6 +9,7 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN mkdir -p backend && touch backend/__init__.py
 RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
+    python -m pip install --disable-pip-version-check 'pip>=26.2.1' 'setuptools>=83' && \
     python -m pip install --disable-pip-version-check .
 COPY backend backend
 COPY alembic alembic

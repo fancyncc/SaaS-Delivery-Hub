@@ -74,7 +74,7 @@ def prepare():
 
     settings.storage_backend = "database"
     settings.cookie_secure = False
-    settings.frontend_base_url = "http://127.0.0.1:8000"
+    settings.frontend_base_url = "http://127.0.0.1:8080"
     credentials_file = OUTPUT / "credentials.json"
     if credentials_file.exists():
         credentials = json.loads(credentials_file.read_text(encoding="utf-8"))
@@ -120,8 +120,14 @@ async def seed(credentials, manifest, documents):
             raise RuntimeError(f"Main login failed: HTTP {response.status_code}")
         profile = await call(admin, 'GET', '/api/auth/profile')
         if not profile['email_verified']:
-            sent = await call(admin, 'POST', '/api/auth/profile/email', payload={"email": account['email'], "current_password": account['password']})
-            token = parse_qs(urlparse(sent['verification_url']).query)['token'][0]
+            await call(admin, 'POST', '/api/auth/profile/email', payload={"email": account['email'], "current_password": account['password']})
+            from sqlalchemy import select
+
+            from backend.models import MailDelivery
+            async with SessionLocal() as session:
+                delivered = await session.scalar(select(MailDelivery).where(MailDelivery.email == account['email'],
+                    MailDelivery.purpose == "email_verification").order_by(MailDelivery.created_at.desc()).limit(1))
+                token = parse_qs(urlparse(delivered.body).query)['token'][0]
             await call(admin, 'POST', '/api/auth/verify-email', payload={"token": token})
         spaces = await call(admin, 'GET', '/api/auth/spaces')
         company = next((s for s in spaces if s['tenant_name'] == COMPANY), None)
@@ -291,7 +297,7 @@ async def seed(credentials, manifest, documents):
 
 def write_guide(credentials, manifest):
     lines = ["# 星澜演示空间测试指南", "", "> 全部公司、人员与业务内容均为虚构测试数据。数据通过应用接口写入本地数据库，未发出真实邮件，未调用外部模型。", "",
-             "## 登录", "", "入口：http://127.0.0.1:8000/login。请使用客户登录入口，登录后选择“星澜智造科技有限公司（演示）”公司空间。", "",
+             "## 登录", "", "入口：http://127.0.0.1:8080/login。请使用客户登录入口，登录后选择“星澜智造科技有限公司（演示）”公司空间。", "",
              "账号密码见同目录 `credentials.json` 和 `测试账号.md`。凭据未上传知识库。", "", "## 项目场景", "",
              "| 项目 | 预置阶段 | 实际业务成员 | 实际交付物 | 推荐操作 |", "|---|---|---:|---:|---|"]
     actions = {"draft": "管理员或顾问启动，观察计划生成", "plan": "用审批人账号审阅并批准或拒绝计划", "configuration": "核对配置差异，再批准配置", "materials": "顾问查看错误报告，上传正确 40 人 CSV", "acceptance": "审批人完成最后验收，观察结项", "completed": "下载六类交付物，查看 Trace 和成员"}

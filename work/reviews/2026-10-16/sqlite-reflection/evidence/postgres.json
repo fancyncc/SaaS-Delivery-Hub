@@ -1,0 +1,8 @@
+{
+  "scope": "disposable_postgres",
+  "status": "passed",
+  "migration_roundtrip": "passed",
+  "unique_indexes_and_data": "passed",
+  "security_integration": "passed",
+  "temporary_container_removed": true
+}

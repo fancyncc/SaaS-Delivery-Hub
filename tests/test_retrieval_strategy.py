@@ -321,7 +321,7 @@ async def test_sql_recall_prefilters_and_rejects_foreign_index_ids(monkeypatch):
             sources.append(source)
             units.append(await session.scalar(select(RetrievalUnit).where(RetrievalUnit.document_id == source.id)))
         async def search(tenant_id, ids, query, **kw):
-            assert tenant_id == tenant.id and ids == [sources[0].id]
+            assert tenant_id == [tenant.id] and ids == [sources[0].id]
             return [(units[1].id, 99), (units[0].id, 1)]
         async def vectors(*a, **kw):
             return [[0.0]*512]
@@ -330,7 +330,7 @@ async def test_sql_recall_prefilters_and_rejects_foreign_index_ids(monkeypatch):
                 # SQLite cannot execute pgvector; inspect the real vector SQL
                 # constraints and substitute only the distance calculation.
                 params = statement.compile().params
-                assert tenant.id in params.values()
+                assert [(sources[0].id, tenant.id)] in params.values()
                 assert [sources[0].id] in params.values()
                 assert statement._where_criteria
                 class Result:
@@ -339,7 +339,7 @@ async def test_sql_recall_prefilters_and_rejects_foreign_index_ids(monkeypatch):
                 return Result()
             async def scalars(self, statement):
                 params = statement.compile().params
-                assert tenant.id in params.values() and [sources[0].id] in params.values()
+                assert [(sources[0].id, tenant.id)] in params.values() and [sources[0].id] in params.values()
                 return await session.scalars(statement)
         monkeypatch.setattr('backend.knowledge_search.search', search)
         monkeypatch.setattr(pipeline, 'embeddings', vectors)

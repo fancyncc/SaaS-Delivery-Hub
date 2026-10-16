@@ -34,6 +34,7 @@ LATER_TABLES = {
     "retrieval_documents", "retrieval_nodes", "retrieval_units",
     "project_task_documents", "project_task_reviews",
     "run_snapshots",
+    "cleanup_outbox",
 }
 
 

@@ -15,5 +15,5 @@ def upgrade():
 
 
 def downgrade():
-    with op.batch_alter_table('chat_conversations') as batch:
+    with op.batch_alter_table('chat_conversations', reflect_kwargs={'resolve_fks': False}) as batch:
         batch.drop_column('archived')

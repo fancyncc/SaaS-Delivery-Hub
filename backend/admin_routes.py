@@ -18,14 +18,10 @@ from backend.db import get_session
 from backend.mailer import send_account_link
 from backend.models import (
     AgentRun,
-    AgentStep,
-    Approval,
     AuditEvent,
     CompanyDirectoryEntry,
-    ImportJob,
     Project,
     ProjectCollaboration,
-    ProjectDocument,
     Tenant,
     TenantMembership,
     User,
@@ -544,17 +540,9 @@ async def purge_project(
     deleted_at = project.deleted_at.replace(tzinfo=UTC) if project.deleted_at.tzinfo is None else project.deleted_at
     if deleted_at > datetime.now(UTC) - timedelta(days=30):
         raise HTTPException(409, "项目需保留满 30 天后才能物理清理")
-    run_ids = list(await session.scalars(select(AgentRun.id).where(
-        AgentRun.project_id == project.id, AgentRun.tenant_id == project.tenant_id
-    )))
-    if run_ids:
-        await session.execute(delete(Approval).where(Approval.run_id.in_(run_ids)))
-        await session.execute(delete(AgentStep).where(AgentStep.run_id.in_(run_ids)))
-        await session.execute(delete(AgentRun).where(AgentRun.id.in_(run_ids)))
-    await session.execute(delete(ImportJob).where(ImportJob.project_id == project.id))
-    await session.execute(delete(ProjectDocument).where(ProjectDocument.project_id == project.id))
+    from backend.cleanup import purge_project_data
     session.add(audit_event(request, user, "project.purged", project.id, {"name": project.name}))
-    await session.delete(project)
+    await purge_project_data(session, project)
     await session.commit()
     return {"data": {"purged": True, "id": str(project_id)}}
 

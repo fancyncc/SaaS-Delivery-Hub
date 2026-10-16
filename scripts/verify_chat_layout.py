@@ -12,9 +12,9 @@ async def main():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(channel='chrome')
         page = await browser.new_page(viewport={'width': 1440, 'height': 960})
-        response = await page.request.post('http://127.0.0.1:8000/api/auth/login', data={'username': account['username'], 'password': account['password']})
+        response = await page.request.post('http://127.0.0.1:8080/api/auth/login', data={'username': account['username'], 'password': account['password']})
         assert response.ok
-        await page.goto('http://127.0.0.1:8000/app/chat')
+        await page.goto('http://127.0.0.1:8080/app/chat')
         await expect(page.locator('.history-item').first).to_be_visible()
         await page.screenshot(path=str(output / 'chat-redesign-empty.png'))
         await page.locator('.history-menu-button').first.click()

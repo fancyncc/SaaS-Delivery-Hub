@@ -1,0 +1,480 @@
+{
+  "reference_nltk_version": "3.10.3",
+  "source": "Recorded before removing NLTK; English Punkt parameters pinned in vendor manifest.",
+  "cases": [
+    {
+      "text": "",
+      "word_tokens": [],
+      "mixed_tokens": []
+    },
+    {
+      "text": "Hello world. Next sentence.",
+      "word_tokens": [
+        "Hello",
+        "world",
+        ".",
+        "Next",
+        "sentence",
+        "."
+      ],
+      "mixed_tokens": [
+        "hello",
+        "world",
+        ".",
+        "next",
+        "sentence",
+        "."
+      ]
+    },
+    {
+      "text": "Dr. Smith met Mr. Jones at 3.14 p.m. He left.",
+      "word_tokens": [
+        "Dr.",
+        "Smith",
+        "met",
+        "Mr.",
+        "Jones",
+        "at",
+        "3.14",
+        "p.m",
+        ".",
+        "He",
+        "left",
+        "."
+      ],
+      "mixed_tokens": [
+        "dr.",
+        "smith",
+        "met",
+        "mr.",
+        "jones",
+        "at",
+        "3.14",
+        "p.m.",
+        "he",
+        "left",
+        "."
+      ]
+    },
+    {
+      "text": "I can't, won't and shouldn't. They've said we're ready!",
+      "word_tokens": [
+        "I",
+        "ca",
+        "n't",
+        ",",
+        "wo",
+        "n't",
+        "and",
+        "should",
+        "n't",
+        ".",
+        "They",
+        "'ve",
+        "said",
+        "we",
+        "'re",
+        "ready",
+        "!"
+      ],
+      "mixed_tokens": [
+        "i",
+        "ca",
+        "n't",
+        ",",
+        "wo",
+        "n't",
+        "and",
+        "should",
+        "n't",
+        ".",
+        "they",
+        "'ve",
+        "said",
+        "we",
+        "'re",
+        "ready",
+        "!"
+      ]
+    },
+    {
+      "text": "U.S.A. vs. U.K. etc. A. Bach",
+      "word_tokens": [
+        "U.S.A.",
+        "vs.",
+        "U.K.",
+        "etc",
+        ".",
+        "A.",
+        "Bach"
+      ],
+      "mixed_tokens": [
+        "u.s.a.",
+        "vs.",
+        "u.k.",
+        "etc",
+        ".",
+        "a.",
+        "bach"
+      ]
+    },
+    {
+      "text": "\"Hello.\" (Next sentence.) [End!]",
+      "word_tokens": [
+        "``",
+        "Hello",
+        ".",
+        "''",
+        "(",
+        "Next",
+        "sentence",
+        ".",
+        ")",
+        "[",
+        "End",
+        "!",
+        "]"
+      ],
+      "mixed_tokens": [
+        "``",
+        "hello",
+        ".",
+        "''",
+        "(",
+        "next",
+        "sentence",
+        ".",
+        ")",
+        "[",
+        "end",
+        "!",
+        "]"
+      ]
+    },
+    {
+      "text": "‘Quoted’ “words.” «More!»",
+      "word_tokens": [
+        "‘",
+        "Quoted",
+        "’",
+        "“",
+        "words",
+        ".",
+        "”",
+        "«",
+        "More",
+        "!",
+        "»"
+      ],
+      "mixed_tokens": [
+        "‘",
+        "quoted",
+        "words",
+        ".",
+        "«",
+        "more",
+        "!",
+        "»"
+      ]
+    },
+    {
+      "text": "... .... ?! !?!",
+      "word_tokens": [
+        "...",
+        "....",
+        "?",
+        "!",
+        "!",
+        "?",
+        "!"
+      ],
+      "mixed_tokens": [
+        "...",
+        "....",
+        "?",
+        "!",
+        "!",
+        "?",
+        "!"
+      ]
+    },
+    {
+      "text": "1,000.25 12:30 50% $2.99 user@example.com https://example.com/a-b",
+      "word_tokens": [
+        "1,000.25",
+        "12:30",
+        "50",
+        "%",
+        "$",
+        "2.99",
+        "user",
+        "@",
+        "example.com",
+        "https",
+        ":",
+        "//example.com/a-b"
+      ],
+      "mixed_tokens": [
+        "1,000.25",
+        "1230",
+        "50",
+        "%",
+        "$",
+        "2.99",
+        "user",
+        "@",
+        "example.com",
+        "httpsexample.comab"
+      ]
+    },
+    {
+      "text": "cannot gonna wanna gimme gotta lemme d'ye more'n 'tis 'twas",
+      "word_tokens": [
+        "can",
+        "not",
+        "gon",
+        "na",
+        "wan",
+        "na",
+        "gim",
+        "me",
+        "got",
+        "ta",
+        "lem",
+        "me",
+        "d",
+        "'ye",
+        "more",
+        "'n",
+        "'",
+        "tis",
+        "'",
+        "twas"
+      ],
+      "mixed_tokens": [
+        "can",
+        "not",
+        "gon",
+        "na",
+        "wan",
+        "na",
+        "gim",
+        "me",
+        "got",
+        "ta",
+        "lem",
+        "me",
+        "d",
+        "'ye",
+        "more",
+        "'n",
+        "'",
+        "tis",
+        "'",
+        "twas"
+      ]
+    },
+    {
+      "text": "第一版v1.2.3在2026年发布。English text. Next sentence!",
+      "word_tokens": [
+        "第一版v1.2.3在2026年发布。English",
+        "text",
+        ".",
+        "Next",
+        "sentence",
+        "!"
+      ],
+      "mixed_tokens": [
+        "第",
+        "一",
+        "版",
+        "v1.2.3",
+        "在",
+        "2026",
+        "年",
+        "发",
+        "布",
+        "english",
+        "text",
+        ".",
+        "next",
+        "sentence",
+        "!"
+      ]
+    },
+    {
+      "text": "a\r\nb\t c\n\nDr. No.",
+      "word_tokens": [
+        "a",
+        "b",
+        "c",
+        "Dr.",
+        "No",
+        "."
+      ],
+      "mixed_tokens": [
+        "a",
+        "b",
+        "c",
+        "dr.",
+        "no",
+        "."
+      ]
+    },
+    {
+      "text": "🙂 café naïve coöperate Ελληνικά 日本語 한국어",
+      "word_tokens": [
+        "🙂",
+        "café",
+        "naïve",
+        "coöperate",
+        "Ελληνικά",
+        "日本語",
+        "한국어"
+      ],
+      "mixed_tokens": [
+        "🙂",
+        "café",
+        "naïve",
+        "coöperate",
+        "ελληνικά",
+        "日",
+        "本",
+        "語",
+        "한국어"
+      ]
+    },
+    {
+      "text": "e.g. i.e. Inc. Jan. St. vs. etc.",
+      "word_tokens": [
+        "e.g",
+        ".",
+        "i.e",
+        ".",
+        "Inc.",
+        "Jan.",
+        "St.",
+        "vs.",
+        "etc",
+        "."
+      ],
+      "mixed_tokens": [
+        "e.g",
+        ".",
+        "i.e",
+        ".",
+        "inc.",
+        "jan.",
+        "st.",
+        "vs.",
+        "etc",
+        "."
+      ]
+    },
+    {
+      "text": "alpha-beta gamma_delta a/b a\\b",
+      "word_tokens": [
+        "alpha-beta",
+        "gamma_delta",
+        "a/b",
+        "a\\b"
+      ],
+      "mixed_tokens": [
+        "alphabeta",
+        "gammadelta",
+        "ab",
+        "ab"
+      ]
+    },
+    {
+      "text": "\"a\" 'b' ``c'' -- d—e … end.",
+      "word_tokens": [
+        "``",
+        "a",
+        "''",
+        "'",
+        "b",
+        "'",
+        "``",
+        "c",
+        "''",
+        "--",
+        "d",
+        "—",
+        "e",
+        "…",
+        "end",
+        "."
+      ],
+      "mixed_tokens": [
+        "``",
+        "a",
+        "''",
+        "'",
+        "b",
+        "'",
+        "c",
+        "''",
+        "d",
+        "—",
+        "e",
+        "…",
+        "end",
+        "."
+      ]
+    }
+  ],
+  "scores": [
+    {
+      "answers": [
+        "Dr. Smith can't go. Next!"
+      ],
+      "prediction": "Dr. Smith can go. Next!",
+      "score": {
+        "em": 0.0,
+        "f1": 0.5333333333333333
+      }
+    },
+    {
+      "answers": [
+        "v1.2.3版本",
+        "2.0"
+      ],
+      "prediction": "v1.2.3",
+      "score": {
+        "em": 0.0,
+        "f1": 0.5
+      }
+    },
+    {
+      "answers": [
+        "北京 can't stop. Next!"
+      ],
+      "prediction": "北京 can't stop.",
+      "score": {
+        "em": 0.0,
+        "f1": 0.8571428571428571
+      }
+    },
+    {
+      "answers": [
+        "Hello. Next sentence!"
+      ],
+      "prediction": "Hello next sentence",
+      "score": {
+        "em": 0.0,
+        "f1": 0.5
+      }
+    },
+    {
+      "answers": [
+        "3.14 1,000.25"
+      ],
+      "prediction": "3.14",
+      "score": {
+        "em": 0.0,
+        "f1": 0.6666666666666666
+      }
+    }
+  ]
+}

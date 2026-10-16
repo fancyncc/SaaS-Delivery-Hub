@@ -45,6 +45,15 @@ def identity():
     )
 
 
+def index_state(source, *, current_identity=None):
+    """Report the same readiness barrier used by retrieval, not just stored phase."""
+    if source is None:
+        return "missing"
+    if source.phase == "ready" and source.identity != (current_identity or identity()):
+        return "stale"
+    return source.phase
+
+
 def exact_terms(text):
     return sorted(set(re.findall(r"\$\[[^\n]+|[A-Za-z_][\w./:-]*|\d+(?:[.-]\d+)+", text)))
 
@@ -124,7 +133,7 @@ async def index_document(session, source):
     from backend.knowledge_search import publish
 
     started = time.perf_counter()
-    parser = parse_isolated if source.filename.lower().endswith((".pdf", ".pptx", ".xlsx")) else parse
+    parser = parse_isolated if source.filename.lower().endswith((".pdf", ".docx", ".pptx", ".xlsx")) else parse
     parsed = await asyncio.to_thread(parser, source.filename, source.raw, **source.options)
     parsed_at = time.perf_counter()
     origin = await session.get(KnowledgeDocument, source.origin_id)
@@ -273,7 +282,7 @@ async def index_document(session, source):
         origin.index_error = ""
 
 
-async def process(session, tenant_id):
+async def process(session, tenant_id, limit=4):
     # Bootstrap historical uploads, not just documents uploaded after Knowledge enabled.
     missing = list(
         await session.scalars(
@@ -323,21 +332,23 @@ async def process(session, tenant_id):
                 IndexedDocument.tenant_id == tenant_id,
                 IndexedDocument.phase.in_(["pending", "failed"]),
                 IndexedDocument.attempts < 3,
+                IndexedDocument.next_attempt <= time.time(),
             )
             .order_by(IndexedDocument.id)
-            .limit(4)
+            .limit(limit)
             .with_for_update(skip_locked=True)
         )
     )
     for source in rows:
         try:
             async with session.begin_nested():
-                async with asyncio.timeout(630 if source.filename.lower().endswith(".pdf") else 180):
+                async with asyncio.timeout(810 if source.filename.lower().endswith(".pdf") else 180):
                     await index_document(session, source)
         except Exception as exc:
             await session.refresh(source)
             source.attempts += 3 if isinstance(exc, HTTPException) and exc.status_code in (413, 415, 422) else 1
             source.phase = "failed"
+            source.next_attempt = time.time() + min(3600, 30 * 2 ** source.attempts)
             source.error = (
                 exc.detail[:300]
                 if isinstance(exc, HTTPException) and isinstance(exc.detail, str)

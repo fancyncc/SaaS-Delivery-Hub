@@ -25,7 +25,7 @@ function Wait-ComparisonModel([string] $Service, [string[]] $Compose) {
     throw "Model service readiness timed out: $Service"
 }
 
-$ready = Invoke-RestMethod -Uri 'http://localhost:8000/ready' -TimeoutSec 5
+$ready = Invoke-RestMethod -Uri 'http://localhost:8080/ready' -TimeoutSec 5
 if ($ready.status -ne 'ready') { throw 'Complete local deployment before comparing models.' }
 Wait-ComparisonModel 'retrieval' @('compose', '--profile', 'rag')
 Invoke-ComparisonDocker ($candidateCompose + @('config', '--quiet'))

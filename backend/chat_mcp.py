@@ -16,6 +16,7 @@ from backend.chat_routes import customer, owned, require_unarchived
 from backend.config import get_settings
 from backend.db import get_session
 from backend.rate_limit import enforce_rate_limit
+from backend.resource_limits import work_budget
 
 router = APIRouter(prefix="/api/mcp", tags=["mcp"])
 
@@ -170,12 +171,13 @@ async def rpc(request: Request, user=Depends(customer), session=Depends(get_sess
     if method == "tools/list":
         return {**envelope, "result": {"tools": tool_list()}}
     if method == "tools/call":
-        try:
-            result = await call_tool(session, user, params.get("name"), params.get("arguments", {}), request.app.openapi())
-        except (ValueError, ValidationError):
-            return {**envelope, "error": {"code": -32602, "message": "Invalid tool name or arguments"}}
-        except (HTTPException, httpx.HTTPError, TimeoutError):
-            logging.getLogger(__name__).exception("MCP authorized retrieval failed")
-            return {**envelope, "result": {"isError": True, "content": [{"type": "text", "text": "工具不可用或无权访问该范围"}]}}
-        return {**envelope, "result": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}], "isError": False}}
+        async with work_budget(user, "retrieval"):
+            try:
+                result = await call_tool(session, user, params.get("name"), params.get("arguments", {}), request.app.openapi())
+            except (ValueError, ValidationError):
+                return {**envelope, "error": {"code": -32602, "message": "Invalid tool name or arguments"}}
+            except (HTTPException, httpx.HTTPError, TimeoutError):
+                logging.getLogger(__name__).exception("MCP authorized retrieval failed")
+                return {**envelope, "result": {"isError": True, "content": [{"type": "text", "text": "工具不可用或无权访问该范围"}]}}
+            return {**envelope, "result": {"content": [{"type": "text", "text": json.dumps(result, ensure_ascii=False)}], "isError": False}}
     return {**envelope, "error": {"code": -32601, "message": "Method not found"}}

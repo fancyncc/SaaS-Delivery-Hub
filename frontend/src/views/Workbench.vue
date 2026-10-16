@@ -39,7 +39,7 @@ async function deactivate(id:string) {
   catch(e:any) { error.value=e.message }
 }
 onMounted(load)
-const indexLabels: Record<string,string> = {indexed_pending:'等待解析', indexed_parsing:'解析中', indexed_indexing:'索引中', indexed_ready:'可检索', indexed_failed:'解析或索引失败', indexed_unsupported:'格式不支持', indexed_missing_original:'需重新上传原文件'}
+const indexLabels: Record<string,string> = {indexed_pending:'等待解析', indexed_parsing:'解析中', indexed_indexing:'索引中', indexed_ready:'可检索', indexed_stale:'索引版本已过期 · 等待重建', indexed_failed:'解析或索引失败', indexed_unsupported:'格式不支持', indexed_missing_original:'需重新上传原文件'}
 const taskNames: Record<string,string> = {
   create_project:'创建项目', collect_requirements:'提取客户需求', detect_missing_information:'检查历史资料', retrieve_product_knowledge:'检索产品知识', gap_analysis:'生成能力差距', generate_implementation_plan:'生成实施计划', plan_approval:'审批实施计划', inspect_tenant_configuration:'检查租户配置', generate_configuration_changes:'生成配置差异', configuration_approval:'审批配置变更', apply_configuration:'应用租户配置', validate_import_files:'上传并校验成员 CSV', import_approval:'审批数据导入', execute_import:'执行数据导入', generate_training_materials:'生成培训材料', run_go_live_checks:'运行上线检查', acceptance_approval:'审批上线验收', close_project:'关闭实施项目',
 }

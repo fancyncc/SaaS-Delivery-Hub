@@ -36,7 +36,7 @@ def upgrade():
         return column in {c["name"] for c in sa.inspect(bind).get_columns(table)}
 
     if not has_column("customer_tenants", "kind"):
-        with op.batch_alter_table("customer_tenants") as batch:
+        with op.batch_alter_table("customer_tenants", reflect_kwargs={"resolve_fks": False}) as batch:
             batch.add_column(sa.Column("kind", sa.String(20), nullable=False, server_default="company"))
             batch.add_column(sa.Column("personal_owner_id", sa.String(36), nullable=True))
             batch.create_unique_constraint("uq_tenant_personal_owner", ["personal_owner_id"])
@@ -49,7 +49,7 @@ def upgrade():
     if "uq_active_company_per_user" in indexes:
         op.drop_index("uq_active_company_per_user", table_name="tenant_memberships")
     if not has_column("tenant_memberships", "workspace_kind"):
-        with op.batch_alter_table("tenant_memberships") as batch:
+        with op.batch_alter_table("tenant_memberships", reflect_kwargs={"resolve_fks": False}) as batch:
             batch.add_column(sa.Column("workspace_kind", sa.String(20), nullable=False, server_default="company"))
             batch.create_foreign_key("fk_membership_workspace_kind", "customer_tenants", ["tenant_id", "workspace_kind"], ["id", "kind"])
     op.create_index("uq_active_company_per_user", "tenant_memberships", ["user_id"], unique=True,
@@ -69,8 +69,8 @@ def upgrade():
         for table in ("company_directory_entries", "company_member_imports"):
             op.execute(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
             op.execute(f"CREATE POLICY {table}_scope ON {table} USING (tenant_id = current_setting('app.current_tenant_id', true)) WITH CHECK (tenant_id = current_setting('app.current_tenant_id', true))")
-    tenant_table = sa.Table("customer_tenants", sa.MetaData(), autoload_with=bind)
-    membership_table = sa.Table("tenant_memberships", sa.MetaData(), autoload_with=bind)
+    tenant_table = sa.Table("customer_tenants", sa.MetaData(), autoload_with=bind, resolve_fks=False)
+    membership_table = sa.Table("tenant_memberships", sa.MetaData(), autoload_with=bind, resolve_fks=False)
     now = datetime.now(UTC)
     for user in users:
         if user["account_type"] != "customer":

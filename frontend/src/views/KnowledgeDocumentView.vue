@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { api, writeHeaders } from '../api'
 import { fragmentText } from '../fragmentText'
 const route = useRoute(), document = ref<any>(null), error = ref(''), busy = ref(false)
-const phaseLabels: Record<string,string> = {pending:'等待解析',parsing:'解析中',indexing:'索引中',ready:'索引就绪',failed:'解析或索引失败'}
+const phaseLabels: Record<string,string> = {pending:'等待解析',parsing:'解析中',indexing:'索引中',ready:'索引就绪',stale:'索引版本已过期，等待后台重建',failed:'解析或索引失败'}
 let revision = 0
 const sections = computed(() => (document.value?.body || '').split(/\n(?=#{1,6}\s)/).map((part: string, i: number) => {
   const lines = part.split('\n'), heading = lines[0].match(/^#{1,6}\s+(.+)/)

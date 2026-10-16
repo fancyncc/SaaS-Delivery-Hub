@@ -20,7 +20,8 @@ jobs:
           path: frontend/dist
       - run: python -m pip install -e '.[dev]'
       - run: python -m ruff check .
-      - run: python -m pytest -q --junitxml=tests/artifacts/backend.xml
+      - run: python -m mypy backend
+      - run: python -m pytest -q -W error::sqlalchemy.exc.SAWarning --junitxml=tests/artifacts/backend.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -42,6 +43,8 @@ jobs:
       - run: pnpm typecheck
         working-directory: frontend
       - run: pnpm build
+        working-directory: frontend
+      - run: pnpm audit --audit-level moderate
         working-directory: frontend
       - uses: actions/upload-artifact@v4
         with:
@@ -83,7 +86,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install -e '.[dev]'
-      - run: python -m pytest tests/test_evaluation_pipeline.py tests/test_retrieval_evaluation.py -q --junitxml=tests/artifacts/evaluation.xml
+      - run: python -m pytest tests/test_evaluation_pipeline.py tests/test_retrieval_evaluation.py tests/test_cmrc_evaluation.py tests/test_benchmark_tokenizer.py -q --junitxml=tests/artifacts/evaluation.xml
       # These suites run in one process at a time because they share tests/test.db.
       - run: python scripts/evaluate_project.py suite --suite agent --output tests/artifacts/agent
       - run: python scripts/evaluate_project.py suite --suite memory --output tests/artifacts/memory
@@ -110,3 +113,56 @@ jobs:
             [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD $script), [ref]$parseTokens, [ref]$parseErrors) | Out-Null
             if ($parseErrors) { throw ($parseErrors -join "`n") }
           }
+
+  security-postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+          POSTGRES_DB: security_remediation_test
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - run: python -m pip install -e '.[dev]'
+      - run: python tests/check_security_postgres.py
+        env:
+          SECURITY_TEST_POSTGRES_URL: postgresql://postgres@127.0.0.1:5432/security_remediation_test
+
+  runtime-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade 'pip>=26.2.1' 'setuptools>=83'
+      - run: python -m pip install . 'pip-audit>=2.10,<3'
+      - run: python -m pip_audit --format json --output runtime-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: runtime-dependency-audit
+          path: runtime-audit.json
+
+  evaluation-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install --upgrade 'pip>=26.2.1' 'setuptools>=83'
+      - run: python -m pip install '.[dev,benchmark]'
+      - run: python -m pip_audit --format json --output evaluation-audit.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: evaluation-dependency-audit
+          path: evaluation-audit.json

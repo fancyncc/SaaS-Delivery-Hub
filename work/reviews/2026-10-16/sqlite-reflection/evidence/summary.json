@@ -1,0 +1,23 @@
+{
+  "status": "passed",
+  "pytest": {
+    "tests": "37",
+    "failures": "0",
+    "errors": "0",
+    "skipped": "0",
+    "time": "182.452"
+  },
+  "pytest_warning_mode": "error",
+  "pytest_warnings": 0,
+  "postgres": {
+    "scope": "disposable_postgres",
+    "status": "passed",
+    "migration_roundtrip": "passed",
+    "unique_indexes_and_data": "passed",
+    "security_integration": "passed",
+    "temporary_container_removed": true
+  },
+  "ruff": "passed",
+  "diff_check": "passed",
+  "runtime_redeployed": false
+}

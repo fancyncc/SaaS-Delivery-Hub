@@ -1,7 +1,7 @@
 """Derived retrieval data, separate metadata to keep historical migrations frozen."""
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from backend.models import Project, Tenant, User, uid, utcnow
@@ -33,6 +33,7 @@ class RetrievalSource(RetrievalBase):
     indexed_generation: Mapped[int] = mapped_column(Integer, default=0)
     index_identity: Mapped[str] = mapped_column(String(160), default="")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt: Mapped[float] = mapped_column(Float, default=0)
     error_code: Mapped[str] = mapped_column(String(64), default="")
     chunks_total: Mapped[int] = mapped_column(Integer, default=0)
     chunks_done: Mapped[int] = mapped_column(Integer, default=0)

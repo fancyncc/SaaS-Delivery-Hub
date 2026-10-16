@@ -1,0 +1,86 @@
+{
+  "status": 200,
+  "detail": null,
+  "attempts": [
+    {
+      "source_count": 9,
+      "source_id_numbers": {
+        "evidence-1": [
+          1
+        ],
+        "evidence-2": [
+          2
+        ],
+        "evidence-3": [
+          3
+        ],
+        "evidence-4": [
+          4
+        ],
+        "evidence-5": [
+          5
+        ],
+        "evidence-6": [
+          6
+        ],
+        "evidence-7": [
+          7
+        ],
+        "evidence-8": [
+          8
+        ],
+        "evidence-9": [
+          9
+        ]
+      },
+      "source_kinds": [
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "customer_document",
+        "platform_manual",
+        "runtime"
+      ],
+      "cited_numbers": [
+        2,
+        3,
+        6,
+        8,
+        9
+      ],
+      "provided_ids_known": [
+        true,
+        true,
+        true,
+        true,
+        true
+      ],
+      "provided_ids_are_kinds": [
+        false,
+        false,
+        false,
+        false,
+        false
+      ],
+      "expected_numbers_from_ids": [
+        2,
+        3,
+        6,
+        8,
+        9
+      ],
+      "provided_ids": [
+        "evidence-9",
+        "evidence-2",
+        "evidence-3",
+        "evidence-6",
+        "evidence-8"
+      ]
+    }
+  ],
+  "real_source_identity_preserved": true,
+  "test_conversation_deleted": true
+}

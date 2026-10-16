@@ -1,0 +1,13 @@
+{
+  "runtime_role": {
+    "status": "passed",
+    "protected_tables": 22
+  },
+  "postgres_rls": "passed",
+  "pool_context_switch": "passed",
+  "concurrent_run_start": "passed",
+  "snapshot_immutability": "passed",
+  "committed_worker_replay": "passed",
+  "run_id": "f9de0a44-254a-4b34-aa6f-5cc2c54f8b73",
+  "event_id": "47f7720d-3dd4-4c6e-a033-0681af34aae5"
+}

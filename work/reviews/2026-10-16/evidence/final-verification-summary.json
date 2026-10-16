@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-16",
+  "status": "passed",
+  "full_regression": {
+    "passed": 589,
+    "failed": 0,
+    "skipped": 0
+  },
+  "current_tests_verified": 597,
+  "browser_tests_executed": 4,
+  "citation_followup_passed": 112,
+  "real_assistant_cases": 3,
+  "mcp_and_sse": "passed",
+  "rag_original_questions": [
+    {
+      "question": "成员迁移流程是怎样的",
+      "evidence": 3,
+      "tokens": 736
+    },
+    {
+      "question": "触发回滚的情况有哪些",
+      "evidence": 1,
+      "tokens": 202
+    }
+  ],
+  "dependency_known_vulnerabilities": {
+    "python-audit": 0,
+    "api-final-audit": 0,
+    "retrieval-final-audit": 0
+  },
+  "deployed_schema": "0034_security_remediation",
+  "ready_documents": 45,
+  "remaining_warnings": "4 SQLite expression-index reflection warnings; normalized unique indexes verified intact",
+  "production_acceptance": false
+}

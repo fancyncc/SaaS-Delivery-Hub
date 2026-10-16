@@ -5,7 +5,7 @@ import json
 import re
 import time
 
-from sqlalchemy import exists, or_, select
+from sqlalchemy import exists, or_, select, tuple_
 from sqlalchemy.orm import aliased, load_only
 
 from backend.config import get_settings
@@ -19,9 +19,9 @@ from backend.evidence_coverage import (
     evidence_score,
 )
 from backend.knowledge import lexemes
-from backend.knowledge_index import exact_terms, identity
+from backend.knowledge_index import exact_terms, identity, index_state
 from backend.knowledge_index_models import DocumentNode, IndexedDocument, RetrievalUnit
-from backend.models import KnowledgeDocument
+from backend.models import KnowledgeDocument, Project
 from backend.retrieval_policy import (
     PIPELINE_SCHEMA,
     document_object_identifiers,
@@ -33,7 +33,6 @@ from backend.retrieval_policy import (
     query_identifiers,
     query_policy,
     requested_labels,
-    retrieval_question,
     structural_relation,
 )
 from backend.retrieval_release import classify, features, release
@@ -51,7 +50,7 @@ def needs_retrieval(question):
     )
 
 
-def visible_documents(tenant, projects):
+def visible_documents(tenant, projects, *, include_unindexed=False):
     newer = aliased(KnowledgeDocument)
     enabled = []
     if not get_settings().rag_pdf_enabled:
@@ -59,7 +58,7 @@ def visible_documents(tenant, projects):
     if not get_settings().rag_office_enabled:
         enabled.extend((~KnowledgeDocument.source.ilike("%.pptx"),
                         ~KnowledgeDocument.source.ilike("%.xlsx")))
-    return (
+    statement = (
         select(IndexedDocument, KnowledgeDocument)
         .options(
             load_only(IndexedDocument.id, IndexedDocument.phase, IndexedDocument.identity, raiseload=True),
@@ -68,25 +67,29 @@ def visible_documents(tenant, projects):
                 KnowledgeDocument.title,
                 KnowledgeDocument.version,
                 KnowledgeDocument.source,
+                KnowledgeDocument.tenant_id,
                 raiseload=True,
             ),
         )
-        .join(KnowledgeDocument, IndexedDocument.origin_id == KnowledgeDocument.id)
+        .select_from(KnowledgeDocument)
+        .join(IndexedDocument, (IndexedDocument.origin_id == KnowledgeDocument.id)
+              & (IndexedDocument.tenant_id == KnowledgeDocument.tenant_id), isouter=include_unindexed)
         .where(
-            IndexedDocument.tenant_id == tenant,
-            KnowledgeDocument.tenant_id == tenant,
             KnowledgeDocument.active.is_(True),
             *enabled,
-            or_(KnowledgeDocument.project_id.is_(None), KnowledgeDocument.project_id.in_(projects)),
+            or_((KnowledgeDocument.tenant_id == tenant) & KnowledgeDocument.project_id.is_(None),
+                KnowledgeDocument.project_id.in_(projects) & exists(select(Project.id).where(
+                    Project.id == KnowledgeDocument.project_id, Project.deleted_at.is_(None)))),
             ~exists(
                 select(newer.id).where(
-                    newer.tenant_id == tenant,
+                    newer.tenant_id == KnowledgeDocument.tenant_id,
                     newer.title == KnowledgeDocument.title,
                     newer.version > KnowledgeDocument.version,
                 )
             ),
         )
     )
+    return statement
 
 
 def serialize(hit):
@@ -130,6 +133,12 @@ async def rerank(question, hits):
     return sorted(output, key=lambda h: (-h["rerank_score"], h["id"]))
 
 
+def authorized_units(model, documents):
+    # Bind document and tenant together; independent IN lists create a Cartesian scope.
+    return tuple_(model.document_id, model.tenant_id).in_(
+        [(identifier, document.tenant_id) for identifier, (_, document) in documents.items()])
+
+
 async def recall(session, tenant, question, documents, policy=None):
     from backend.knowledge_search import search
 
@@ -138,17 +147,17 @@ async def recall(session, tenant, question, documents, policy=None):
         return [], {"bm25": 0, "vector": 0, "exact": 0}
     policy = policy or query_policy(question)
     limit = policy.recall_limit
-    base = select(RetrievalUnit).where(RetrievalUnit.tenant_id == tenant, RetrievalUnit.document_id.in_(ids))
+    base = select(RetrievalUnit).where(authorized_units(RetrievalUnit, documents), RetrievalUnit.document_id.in_(ids))
     # Network branches run concurrently; SQL uses a single session sequentially.
     lexical, vectors = await asyncio.gather(
-        search(tenant, ids, lexemes(question), limit=limit), embeddings([question], query=True)
+        search(sorted({doc.tenant_id for _, doc in documents.values()}), ids, lexemes(question), limit=limit), embeddings([question], query=True)
     )
     distance = RetrievalUnit.embedding.op("<=>")(vectors[0])
     vector = (
         await session.execute(
             select(RetrievalUnit.id, distance.label("distance"))
             .where(
-                RetrievalUnit.tenant_id == tenant,
+                authorized_units(RetrievalUnit, documents),
                 RetrievalUnit.document_id.in_(ids),
                 RetrievalUnit.embedding.is_not(None),
             )
@@ -282,7 +291,7 @@ async def supplement(session, tenant, selected, documents, policy=None):
         rows = await session.scalars(
             select(RetrievalUnit)
             .where(
-                RetrievalUnit.tenant_id == tenant,
+                authorized_units(RetrievalUnit, documents),
                 RetrievalUnit.document_id == item["document_id"],
                 or_(*relations),
                 RetrievalUnit.id.not_in(seen),
@@ -325,7 +334,7 @@ async def attach_identity_context(session, tenant, candidates, documents):
     if not candidates:
         return
     nodes = list(await session.scalars(select(DocumentNode).where(
-        DocumentNode.tenant_id == tenant, DocumentNode.document_id.in_(documents),
+        authorized_units(DocumentNode, documents), DocumentNode.document_id.in_(documents),
         DocumentNode.id.in_([h["node_id"] for h in candidates]),
     )))
     by_id = {n.id: n for n in nodes}
@@ -333,7 +342,7 @@ async def attach_identity_context(session, tenant, candidates, documents):
     if not refs:
         return
     anchors = {n.id: n for n in await session.scalars(select(DocumentNode).where(
-        DocumentNode.tenant_id == tenant, DocumentNode.document_id.in_(documents), DocumentNode.id.in_(refs),
+        authorized_units(DocumentNode, documents), DocumentNode.document_id.in_(documents), DocumentNode.id.in_(refs),
     ))}
     for h in candidates:
         node = by_id.get(h["node_id"])
@@ -364,7 +373,7 @@ async def recall_explicit_structure(
         await session.scalars(
             select(RetrievalUnit)
             .where(
-                RetrievalUnit.tenant_id == tenant,
+                authorized_units(RetrievalUnit, documents),
                 RetrievalUnit.document_id.in_(scoped_documents),
                 RetrievalUnit.id.not_in(seen),
                 or_(*[RetrievalUnit.text.icontains(label, autoescape=True) for label in labels]),
@@ -443,11 +452,32 @@ async def run(session, tenant, question, projects, budget, config):
     started = time.perf_counter()
     phase_started = started
     timings = {}
-    rows = (await session.execute(visible_documents(tenant, projects))).all()
+    rows = (await session.execute(visible_documents(tenant, projects, include_unindexed=True))).all()
     timings["authorization_ms"] = round((time.perf_counter() - phase_started) * 1000, 2)
-    documents = {s.id: (s, d) for s, d in rows if s.phase == "ready" and s.identity == identity()}
-    pending = sum(s.phase != "ready" or s.identity != identity() for s, d in rows)
+    current_identity = identity()
+    states = {}
+    for source, _ in rows:
+        state = index_state(source, current_identity=current_identity)
+        states[state] = states.get(state, 0) + 1
+    documents = {s.id: (s, d) for s, d in rows
+                 if index_state(s, current_identity=current_identity) == "ready"}
+    pending = len(rows) - len(documents)
+    availability = {"visible_documents": len(rows), "ready_documents": len(documents),
+                    "states": states, "indexing_enabled": get_settings().retrieval_indexing_enabled}
     if not documents:
+        unavailable_reason = (
+            "no_documents" if not rows else
+            "indexing_disabled" if not get_settings().retrieval_indexing_enabled else
+            "index_failed" if states.get("failed") else
+            "stale_index" if states.get("stale") else "index_pending"
+        )
+        reasons = {
+            "no_documents": "当前检索范围内没有可用文档，请确认项目范围或上传资料。",
+            "indexing_disabled": "文档尚不可检索，后台索引处理未开启，请联系管理员开启索引任务。",
+            "index_failed": "文档解析或索引失败，请在知识库查看失败原因并重试。",
+            "stale_index": "文档索引与当前模型或解析版本不兼容，需要后台重建后才能检索。",
+            "index_pending": "文档尚未完成索引，请在知识库查看处理状态。",
+        }
         return {
             "pipeline": "retrieval",
             "pipeline_schema": PIPELINE_SCHEMA,
@@ -460,8 +490,18 @@ async def run(session, tenant, question, projects, budget, config):
             "conflict": False,
             "completeness": "unknown",
             "coverage": "unknown",
-            "reason": "无可用资料或最新版本索引尚未就绪",
+            "reason": reasons[unavailable_reason],
+            "unavailable_reason": unavailable_reason,
+            "retrieval_executed": False,
+            "index_availability": availability,
             "pending_documents": pending,
+            "diagnostics": {
+                "candidate_count": 0, "supplement_count": 0, "relevant_count": 0,
+                "selected_count": 0, "rerank_count": 0, "routes": {}, "candidates": [],
+                "original_tokens": 0, "final_tokens": 0, "dedup_saved_tokens": 0,
+                "budget": budget, "tokenizer": "BGE 检索 tokenizer token",
+                "timings_ms": {**timings, "total": round((time.perf_counter() - started) * 1000, 2)},
+            },
         }
     policy = query_policy(question)
     frame = decompose_question(question)
@@ -485,7 +525,10 @@ async def run(session, tenant, question, projects, budget, config):
             if index < len(branch) and branch[index]["id"] not in visited:
                 visited.add(branch[index]["id"])
                 candidates.append(candidates_by_id[branch[index]["id"]])
-    ranking_question = retrieval_question(question)
+    # Expansion improves recall, but appended glossary terms change the
+    # CrossEncoder's relevance task and can suppress directly answering text.
+    # Score every original and supplemented candidate against the user's intent.
+    ranking_question = question
     await attach_identity_context(session, tenant, candidates, documents)
     identifiers_by_document = document_object_identifiers(candidates)
     scoped_documents = identifier_documents(question, candidates)
@@ -607,7 +650,7 @@ async def run(session, tenant, question, projects, budget, config):
     if node_ids:
         nodes = await session.scalars(
             select(DocumentNode).where(
-                DocumentNode.tenant_id == tenant,
+                authorized_units(DocumentNode, documents),
                 DocumentNode.document_id.in_(documents),
                 DocumentNode.id.in_(node_ids),
             )
@@ -668,6 +711,8 @@ async def run(session, tenant, question, projects, budget, config):
     return {
         "pipeline": "retrieval",
         "pipeline_schema": PIPELINE_SCHEMA,
+        "retrieval_executed": True,
+        "index_availability": availability,
         "status": status,
         "query_types": list(policy.types),
         "result_status": "evidence_found" if selected and not conflicts else "insufficient",

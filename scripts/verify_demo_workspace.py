@@ -8,7 +8,7 @@ from playwright.async_api import async_playwright, expect
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "demo_workspace"
-BASE = "http://127.0.0.1:8000"
+BASE = "http://127.0.0.1:8080"
 
 
 async def main():

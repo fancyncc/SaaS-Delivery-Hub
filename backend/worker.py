@@ -43,8 +43,10 @@ celery = Celery("implementation", broker=get_settings().redis_url, task_cls=Guar
 celery.conf.update(
     task_acks_late=True, task_reject_on_worker_lost=True, worker_prefetch_multiplier=1,
     task_soft_time_limit=240, task_time_limit=300,
-    task_routes={"implementation.knowledge": {"queue": "indexing"}},
-    beat_schedule={"chat_context": {"task": "implementation.chat_context", "schedule": 5.0}, "outbox": {"task": "implementation.dispatch", "schedule": 2.0}, "mail": {"task": "implementation.mail", "schedule": 10.0}, "knowledge": {"task": "implementation.knowledge", "schedule": 10.0}},
+    task_routes={"implementation.knowledge": {"queue": "indexing"},
+                 "implementation.index_tenant": {"queue": "indexing"},
+                 "implementation.cleanup": {"queue": "indexing"}},
+    beat_schedule={"cleanup": {"task": "implementation.cleanup", "schedule": 3600.0}, "chat_context": {"task": "implementation.chat_context", "schedule": 5.0}, "outbox": {"task": "implementation.dispatch", "schedule": 2.0}, "mail": {"task": "implementation.mail", "schedule": 10.0}, "knowledge": {"task": "implementation.knowledge", "schedule": 10.0}},
 )
 
 
@@ -237,36 +239,101 @@ async def setup_checkpoints():
         await saver.setup()
 
 
-async def index_knowledge():
+async def index_knowledge(tenant_id=None, stage=None):
     from backend.knowledge import process_pending
     from backend.retrieval_sources import process_sources
     engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
         async with factory() as session:
-            tenants = list(await session.scalars(select(Tenant.id).where(Tenant.status == "active")))
-        for tenant_id in tenants:
-            async with factory() as session:
-                if session.bind.dialect.name == "postgresql":
-                    await session.execute(text("SELECT set_config('app.current_tenant_id', :tenant, true)"), {"tenant": tenant_id})
-                    # Tenant indexing is a service operation over all registered
-                    # origins; end-user visibility is checked at retrieval time.
-                    await session.execute(text("SELECT set_config('app.current_company_role', 'company_admin', true)"))
-                if get_settings().rag_mode == "real":
-                    await process_sources(session, tenant_id)
-                else:
-                    await process_pending(session, tenant_id)
-                if get_settings().retrieval_indexing_enabled:
-                    from backend.knowledge_index import process
-                    await process(session, tenant_id)
-                await session.commit()
+            tenants = [tenant_id] if tenant_id else list(await session.scalars(select(Tenant.id).where(Tenant.status == "active")))
+        for identifier in tenants:
+            # One document per transaction, independent of other origins or tenants.
+            for branch in ([stage] if stage else ["sources", "knowledge"]):
+                async with factory() as session:
+                    session.info["rls_context"] = {"app.current_tenant_id": identifier,
+                        "app.current_company_role": "company_admin"}
+                    if session.bind.dialect.name == "postgresql":
+                        for key, value in session.info["rls_context"].items():
+                            await session.execute(text("SELECT set_config(:key, :value, true)"), {"key": key, "value": value})
+                    if branch == "sources":
+                        if get_settings().rag_mode == "real":
+                            await process_sources(session, identifier, limit=1)
+                        else:
+                            await process_pending(session, identifier, limit=1)
+                    elif get_settings().retrieval_indexing_enabled:
+                        from backend.knowledge_index import process
+                        await process(session, identifier, limit=1)
+                    await session.commit()
     finally:
         await engine.dispose()
 
 
-@celery.task(name="implementation.knowledge")
+@celery.task(name="implementation.knowledge", soft_time_limit=30, time_limit=45)
 def build_knowledge_indexes():
-    asyncio.run(index_knowledge())
+    import secrets
+
+    from redis import Redis
+
+    async def tenant_ids():
+        engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+        try:
+            async with async_sessionmaker(engine)() as session:
+                return list(await session.scalars(select(Tenant.id).where(Tenant.status == "active")))
+        finally:
+            await engine.dispose()
+    # Bound queue growth even when scheduler ticks arrive during a slow PDF.
+    with Redis.from_url(get_settings().redis_url, socket_timeout=3) as cache:
+        if cache.llen("indexing"):
+            return
+        candidates = [(tenant, stage) for tenant in sorted(asyncio.run(tenant_ids()))
+                      for stage in ("sources", "knowledge")]
+        for _ in candidates:
+            tenant, stage = candidates[(cache.incr("index-job:cursor") - 1) % len(candidates)]
+            key, token = f"index-job:{tenant}:{stage}", secrets.token_hex(16)
+            if cache.set(key, token, nx=True, ex=1200):
+                try:
+                    index_tenant.delay(tenant, stage, token)
+                    break
+                except Exception:
+                    cache.eval("if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0", 1, key, token)
+                    raise
+
+
+@celery.task(name="implementation.index_tenant", soft_time_limit=870, time_limit=900)
+def index_tenant(tenant_id, stage, token):
+    from redis import Redis
+    key = f"index-job:{tenant_id}:{stage}"
+    with Redis.from_url(get_settings().redis_url, socket_timeout=3) as cache:
+        if not cache.eval("if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('EXPIRE',KEYS[1],1200) end return 0", 1, key, token):
+            return
+        try:
+            asyncio.run(index_knowledge(tenant_id, stage))
+        finally:
+            cache.eval("if redis.call('GET',KEYS[1])==ARGV[1] then return redis.call('DEL',KEYS[1]) end return 0", 1, key, token)
+
+
+@celery.task(name="implementation.cleanup", soft_time_limit=240, time_limit=300)
+def cleanup_projects():
+    from backend.cleanup import drain_cleanup, purge_expired_projects
+
+    async def clean():
+        engine = create_async_engine(get_settings().database_url, poolclass=NullPool)
+        factory = async_sessionmaker(engine, expire_on_commit=False)
+        try:
+            async with factory() as session:
+                tenants = list(await session.scalars(select(Tenant.id).where(Tenant.deleted_at.is_(None))))
+            for tenant in tenants:
+                async with factory() as session:
+                    session.info["rls_context"] = {"app.current_tenant_id": tenant, "app.current_company_role": "company_admin"}
+                    if session.bind.dialect.name == "postgresql":
+                        for key, value in session.info["rls_context"].items():
+                            await session.execute(text("SELECT set_config(:key, :value, true)"), {"key": key, "value": value})
+                    await purge_expired_projects(session, tenant)
+                    await drain_cleanup(session)
+        finally:
+            await engine.dispose()
+    asyncio.run(clean())
 
 
 if __name__ == "__main__":

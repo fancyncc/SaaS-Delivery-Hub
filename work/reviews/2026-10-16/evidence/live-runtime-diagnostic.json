@@ -1,0 +1,10 @@
+{
+  "checks": [],
+  "production_acceptance": false,
+  "failed_request": {
+    "question": "XL-104 当前卡在哪一步，导入出现了什么错误？",
+    "expected_kind": "runtime",
+    "http_status": 422,
+    "reason": "模型引用编号与来源不一致，请重试"
+  }
+}

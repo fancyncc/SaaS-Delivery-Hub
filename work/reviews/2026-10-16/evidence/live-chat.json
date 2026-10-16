@@ -1,0 +1,24 @@
+{
+  "production_acceptance": false,
+  "mcp": {
+    "status": "passed",
+    "sources": 6,
+    "kinds": [
+      "customer_document"
+    ]
+  },
+  "stream": {
+    "status": "passed",
+    "events": {
+      "step": 6,
+      "delta": 99,
+      "done": 1
+    },
+    "elapsed_seconds": 55.55,
+    "citations": 5,
+    "source_metadata_retained": true,
+    "history_reload_matches": true,
+    "generation_mode": "llm"
+  },
+  "test_conversation_deleted": true
+}

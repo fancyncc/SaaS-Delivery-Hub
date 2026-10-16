@@ -34,6 +34,7 @@ const router = createRouter({
     { path: '/accept-platform-invitation', name: 'platform-invitation', component: PlatformInvitationView, meta: { public: true } },
     { path: '/forgot-password', name: 'forgot', component: PasswordView, meta: { public: true } },
     { path: '/reset-password', name: 'reset', component: PasswordView, meta: { public: true } },
+    { path: '/change-password', name: 'change-password', component: PasswordView },
     { path: '/', redirect: '/app' },
     { path: '/app', name: 'home', component: ProjectHome, meta: { customer: true } },
     { path: '/app/chat', name: 'chat', component: ChatView, meta: { customer: true } },
@@ -56,6 +57,7 @@ const router = createRouter({
 router.beforeEach(async to => {
   const auth = useAuthStore()
   if (!auth.loaded) await auth.load()
+  if (auth.user?.must_change_password && to.name !== 'change-password') return '/change-password'
   if (to.meta.public) {
     if (auth.user && (to.name === 'login' || to.name === 'platform-login')) return auth.isPlatform ? '/platform' : '/app'
     return true

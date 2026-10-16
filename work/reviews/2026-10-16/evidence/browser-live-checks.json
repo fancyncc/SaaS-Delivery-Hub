@@ -1,0 +1,24 @@
+{
+  "login": true,
+  "migration": {
+    "evidence": 3,
+    "tokens": 736,
+    "reranked": 32
+  },
+  "rollback": {
+    "evidence": 1,
+    "tokens": 202,
+    "reranked": 64
+  },
+  "sourceDocumentOpened": true,
+  "mobile": {
+    "width": 390,
+    "noHorizontalOverflow": true
+  },
+  "screenshots": [
+    "rag-migration-desktop.png",
+    "rag-rollback-desktop.png",
+    "rag-rollback-mobile.png",
+    "rag-source-document.png"
+  ]
+}

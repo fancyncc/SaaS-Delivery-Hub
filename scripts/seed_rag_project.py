@@ -148,7 +148,7 @@ def main():
         (OUTPUT / f'{filename}.md').write_text(f'# XL-107 {title}\n\n{NOTICE}{body}', encoding='utf-8')
     manifest_path = OUTPUT / 'manifest.json'
     manifest = json.loads(manifest_path.read_text(encoding='utf-8')) if manifest_path.exists() else {'documents': []}
-    with httpx.Client(base_url='http://127.0.0.1:8000', trust_env=False, timeout=120) as client:
+    with httpx.Client(base_url='http://127.0.0.1:8080', trust_env=False, timeout=120) as client:
         def call(method, path, payload=None):
             response = client.request(method, path, json=payload, headers={
                 'X-CSRF-Token': client.cookies.get('saas_csrf', ''), 'Idempotency-Key': str(uuid4())})

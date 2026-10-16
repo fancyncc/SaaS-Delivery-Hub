@@ -1,0 +1,20 @@
+{
+  "reference_nltk_version": "3.10.3",
+  "text_cases": 8887,
+  "tokenization_comparisons": 17774,
+  "score_pairs": 12876,
+  "historical_questions": 200,
+  "historical_metrics": {
+    "em": 70.5,
+    "f1": 87.62201353576889,
+    "evidence_eligible_questions": 200,
+    "evidence_excluded_invalid_positions": 0,
+    "answer_evidence_hit_at_k": {
+      "1": 0.975,
+      "3": 1.0,
+      "5": 1.0
+    },
+    "selected_answer_evidence_hit_rate": 0.98
+  },
+  "mismatches": []
+}

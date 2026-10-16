@@ -10,6 +10,8 @@ PROTECTED_TABLES = (
     "approval_requests", "import_jobs", "saas_workspaces", "saas_members",
     "tool_executions", "project_artifacts", "project_feedback", "run_snapshots",
     "agent_actions", "agent_memories", "agent_lessons",
+    "knowledge_documents", "retrieval_documents", "retrieval_nodes", "retrieval_units",
+    "retrieval_sources", "retrieval_source_chunks", "cleanup_outbox",
 )
 
 

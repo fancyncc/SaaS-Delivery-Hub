@@ -104,6 +104,10 @@ async def current_principal(
     user = await session.get(User, auth.user_id)
     if not user or user.status != "active" or user.deleted_at is not None:
         raise HTTPException(401, "账号不可用")
+    if user.must_change_password and request.url.path not in {
+        "/api/auth/me", "/api/auth/logout", "/api/auth/password/change",
+    }:
+        raise HTTPException(403, {"code": "password_change_required", "message": "请先修改初始密码"})
     auth.last_seen_at = datetime.now(UTC)
     platform_roles = tuple((await session.scalars(select(PlatformRoleBinding.role_code).where(
         PlatformRoleBinding.user_id == user.id,

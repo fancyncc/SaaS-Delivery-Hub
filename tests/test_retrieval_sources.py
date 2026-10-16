@@ -69,6 +69,9 @@ async def test_index_failure_is_sanitized_and_stops_after_three_attempts(monkeyp
     async def broken(body):
         raise ValueError('secret document and token should not be recorded')
 
+    from types import SimpleNamespace
+    clock = [1000.0]
+    monkeypatch.setattr(sources, 'time', SimpleNamespace(time=lambda: clock[0]))
     monkeypatch.setattr(sources, 'document_chunks', broken)
     async with SessionLocal() as session:
         tenant = await session.scalar(select(Tenant).where(Tenant.slug == 'legacy-demo'))
@@ -79,6 +82,9 @@ async def test_index_failure_is_sanitized_and_stops_after_three_attempts(monkeyp
         source = await sync_knowledge(session, document)
         for _ in range(3):
             assert await process_sources(session, tenant.id) == 1
+            assert source.next_attempt > clock[0]
+            assert await process_sources(session, tenant.id) == 0
+            clock[0] = source.next_attempt + 1
         assert source.attempts == 3 and source.phase == 'failed'
         assert source.error_code == 'INDEX_DEPENDENCY_FAILED'
         assert await process_sources(session, tenant.id) == 0

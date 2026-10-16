@@ -13,7 +13,8 @@ def upgrade():
     # Results marked done before this workflow had no review evidence. Return
     # them to active work so they can be submitted and approved explicitly.
     op.execute("UPDATE project_tasks SET status = 'in_progress' WHERE status = 'done'")
-    with op.batch_alter_table("project_tasks") as batch:
+    # FK targets need not be reflected to preserve the task table's constraints.
+    with op.batch_alter_table("project_tasks", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_constraint("ck_project_task_status", type_="check")
         batch.create_check_constraint("ck_project_task_status",
             "status IN ('todo','in_progress','blocked','pending_review','changes_requested','done')")
@@ -59,7 +60,7 @@ def downgrade():
     op.execute("UPDATE project_tasks SET status = 'in_progress' WHERE status IN ('pending_review','changes_requested')")
     op.drop_table("project_task_reviews")
     op.drop_table("project_task_documents")
-    with op.batch_alter_table("project_tasks") as batch:
+    with op.batch_alter_table("project_tasks", reflect_kwargs={"resolve_fks": False}) as batch:
         batch.drop_column("blocking_reason")
         batch.drop_constraint("ck_project_task_status", type_="check")
         batch.create_check_constraint("ck_project_task_status", "status IN ('todo','in_progress','blocked','done')")
